@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Models - BS Architecture Management System{% endblock %}
+
+{% block content %}
+<div class="models-container">
+    <h2>Reliability Models</h2>
+    <p>Select a model to perform analysis:</p>
+    
+    <div class="model-list">
+        <div class="model-item">
+            <h3>JM Model</h3>
+            <p>Jumping Markov Model for software reliability analysis.</p>
+            <a href="{{ url_for('jm_model') }}" class="btn">Analyze with JM Model</a>
+        </div>
+        
+        <div class="model-item">
+            <h3>GO Model</h3>
+            <p>Generalized Optimal Model for software reliability analysis.</p>
+            <a href="#" class="btn disabled">Coming Soon</a>
+        </div>
+        
+        <div class="model-item">
+            <h3>MO Model</h3>
+            <p>Modified Optimization Model for software reliability analysis.</p>
+            <a href="#" class="btn disabled">Coming Soon</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

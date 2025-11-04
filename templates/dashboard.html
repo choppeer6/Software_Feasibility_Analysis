@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h2>Welcome, {{ username }}!</h2>
+    <p>This is your dashboard for the BS Architecture Management System.</p>
+    
+    <div class="card-container">
+        <div class="card">
+            <h3>Model Analysis</h3>
+            <p>Perform various model analyses including JM model.</p>
+            <a href="{{ url_for('models') }}" class="btn">Go to Models</a>
+        </div>
+        
+        <div class="card">
+            <h3>Data Management</h3>
+            <p>Manage and view your data sets.</p>
+            <a href="#" class="btn">Data Management</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
