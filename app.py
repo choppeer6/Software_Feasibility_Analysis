@@ -135,11 +135,28 @@ def api_jm_predict():
         return jsonify({'success': False, 'error': '未登录'}), 401
     
     try:
-        # 解析JSON数据
-        if not request.is_json:
-            return jsonify({'success': False, 'error': '请求必须是JSON格式'}), 400
-        
-        data = request.get_json()
+        # 尝试解析JSON数据（更稳健的方式，兼容不同Flask/Werkzeug版本或被意外覆盖的request对象）
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+
+        # 如果 get_json 没有返回内容，尝试从原始数据解析
+        if data is None:
+            raw = None
+            try:
+                raw = request.get_data(as_text=True)
+            except Exception:
+                raw = None
+
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+
+            try:
+                import json
+                data = json.loads(raw)
+            except Exception:
+                return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
         
         # 验证输入数据
         if not data:
@@ -239,10 +256,27 @@ def api_jm_train():
         return jsonify({'success': False, 'error': '未登录'}), 401
 
     try:
-        if not request.is_json:
-            return jsonify({'success': False, 'error': '请求必须是JSON格式'}), 400
+        # 尝试解析JSON数据（更稳健的方式）
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
 
-        data = request.get_json()
+        if data is None:
+            raw = None
+            try:
+                raw = request.get_data(as_text=True)
+            except Exception:
+                raw = None
+
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+
+            try:
+                import json
+                data = json.loads(raw)
+            except Exception:
+                return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
         train_data = data.get('train_data')
         ex = data.get('ex', 0.001)
         ey = data.get('ey', 0.001)

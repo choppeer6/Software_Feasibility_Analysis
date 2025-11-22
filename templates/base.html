@@ -5,37 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BS Architecture Management System{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='jm_model.css') }}">
+    <!-- JM unified styles (inlined to avoid caching/static loading issues) -->
+    <style>
+        /* Basic page */
+        body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;background:#eef7ff;color:#333}
+        .navbar{background:linear-gradient(to right,#1a73e8,#0d47a1);color:#fff;padding:12px 20px}
+        .nav-container{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+        .navbar-title{font-weight:600}
+
+        /* Layout */
+        .main-container{display:flex;min-height:calc(100vh - 60px)}
+        .sidebar{width:240px;background:#0d47a1;color:#fff}
+        .sidebar-menu{list-style:none;padding:0;margin:0}
+        .sidebar-menu li{padding:14px 18px}
+        .sidebar-menu li:hover{background:#1a73e8}
+        .sidebar-menu a{color:inherit;text-decoration:none;display:block}
+
+        .content-area{flex:1;padding:20px;background:#fff}
+        .tabs{display:flex;border-bottom:1px solid #e5e5e5;margin-bottom:16px}
+        .tab{padding:10px 16px;cursor:pointer}
+        .tab.active{color:#1a73e8;border-bottom:3px solid #1a73e8}
+
+        /* Cards / buttons */
+        .card,.model-item{background:#ecf0f1;padding:16px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+        .btn,button{background:#1a73e8;color:#fff;padding:8px 14px;border-radius:4px;display:inline-block;text-decoration:none;border:none}
+        .btn:hover,button:hover{background:#0d63c1}
+
+        .result-section{margin-top:20px;padding:15px;background:#f9f9f9;border-radius:4px}
+        .footer{text-align:center;padding:18px;background:#2c3e50;color:#fff}
+
+        @media(max-width:768px){.main-container{flex-direction:column}.sidebar{width:100%}}
+    </style>
 </head>
 <body>
-    <nav class="navbar">
+    <div class="navbar">
         <div class="nav-container">
-            <h2>BS Architecture Management</h2>
-            <ul class="nav-menu">
-                <li class="nav-item">
-                    <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ url_for('models') }}" class="nav-link">Models</a>
-                </li>
-                {% if session.username %}
-                <li class="nav-item">
-                    <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
-                </li>
-                {% endif %}
+            <div class="navbar-title">软件可靠性分析平台</div>
+            <div class="navbar-user">{% if session.username %}{{ session.username }} | <a href="{{ url_for('logout') }}" style="color:inherit; text-decoration:underline;">Logout</a>{% else %}<a href="{{ url_for('login') }}" style="color:inherit; text-decoration:underline;">Login</a>{% endif %}</div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="menu-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="menu-item"><a href="{{ url_for('models') }}">Models</a></li>
+                <li class="menu-item"><a href="#">Data Management</a></li>
             </ul>
         </div>
-    </nav>
 
-    <div class="container">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-info">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <div class="content-area">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-info">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-        {% block content %}{% endblock %}
+            {% block content %}{% endblock %}
+        </div>
     </div>
 
     <footer class="footer">
