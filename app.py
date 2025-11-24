@@ -8,7 +8,7 @@ from datetime import datetime
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '软件可行性分析'))
 
 # 导入JM模型函数
-from jm_model_prediction import (
+from model.jm_model_prediction import (
     jm_model_parameter_estimation, 
     jm_predict_future_failures, 
     plot_prediction_results,
