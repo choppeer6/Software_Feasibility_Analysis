@@ -16,14 +16,26 @@
         
         <div class="model-item">
             <h3>GO Model</h3>
-            <p>Generalized Optimal Model for software reliability analysis.</p>
-            <a href="#" class="btn disabled">Coming Soon</a>
+            <p>Goel-Okumoto Model for software reliability analysis.</p>
+            <a href="{{ url_for('go_model') }}" class="btn">Analyze with GO Model</a>
+        </div>
+
+        <div class="model-item">
+            <h3>NHPP模型</h3>
+            <p>非齐次泊松过程模型，支持指数/幂律/对数多种均值函数。</p>
+            <a href="{{ url_for('nhpp_model') }}" class="btn">Analyze with NHPP Model</a>
         </div>
         
         <div class="model-item">
             <h3>MO Model</h3>
             <p>Modified Optimization Model for software reliability analysis.</p>
-            <a href="#" class="btn disabled">Coming Soon</a>
+            <button class="btn" disabled style="opacity: 0.6; cursor: not-allowed;">Coming Soon</button>
+        </div>
+        
+        <div class="model-item">
+            <h3>BP神经网络模型</h3>
+            <p>基于反向传播神经网络的软件可靠性预测模型，适用于时间序列预测。</p>
+            <a href="{{ url_for('bp_model') }}" class="btn">Analyze with BP Neural Network</a>
         </div>
     </div>
 </div>

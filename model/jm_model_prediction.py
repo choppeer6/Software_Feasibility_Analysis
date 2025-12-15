@@ -1,386 +1,254 @@
 import numpy as np
+import math
 import matplotlib.pyplot as plt
-import sys
-import io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-def jm_model_parameter_estimation(times, e_x=1e-5, e_y=1e-5):
-    """JM模型参数估计
-    
-    参数:
-        times: 失效时间间隔数组
-        e_x: x方向容差
-        e_y: y方向容差
-    
-    返回:
-        N0, phi: 模型参数，若估计失败返回None, None
-    
-    异常:
-        ValueError: 输入数据无效时抛出
+
+# ==========================================
+# 核心工具函数：数据预处理
+# ==========================================
+
+def preprocess_data(data, is_interval=False):
     """
-    # 输入验证
-    if not isinstance(times, (list, np.ndarray)):
-        raise ValueError("times参数必须是列表或numpy数组")
+    处理输入数据，确保将其转换为模型所需的【累计失效时间】
+    """
+    data = np.array(data, dtype=np.float64)
+    if len(data) == 0:
+        return np.array([])
+
+    # 智能检测：如果数据不是单调递增的，极有可能是间隔数据，或者乱序数据
+    # 如果用户没有显式指定 is_interval，我们尝试推断
+    is_sorted = np.all(data[:-1] <= data[1:])
+    
+    # 如果明确指定是间隔数据，或者数据明显未排序（累计时间必须排序），则视为间隔数据进行累加
+    if is_interval or (not is_sorted and np.all(data > 0)):
+        # 将间隔转为累计: [9, 12, 11] -> [9, 21, 32]
+        cumulative_data = np.cumsum(data)
+        return cumulative_data
+    
+    # 否则假设是累计数据，进行排序确保单调性
+    return np.sort(data)
+
+def cumulative_to_intervals(cumulative_data):
+    """
+    将累计失效时间转换为失效间隔时间 (用于参数估计内部计算)
+    输入: [9, 21, 32]
+    输出: [9, 12, 11]
+    """
+    if len(cumulative_data) == 0:
+        return np.array([])
+    
+    intervals = np.zeros_like(cumulative_data)
+    intervals[0] = cumulative_data[0]
+    intervals[1:] = np.diff(cumulative_data)
+    
+    # 数据清洗：修正 <= 0 的间隔
+    intervals[intervals <= 0] = 1e-6
+    return intervals
+
+# ==========================================
+# 1. 参数估计函数
+# ==========================================
+
+def jm_model_parameter_estimation(data, ex=1e-4, ey=1e-4):
+    """
+    JM模型参数估计
+    注意：为了容错，这里先对数据进行预处理
+    """
+    # 自动识别并转换数据格式
+    cumulative_data = preprocess_data(data)
+    intervals = cumulative_to_intervals(cumulative_data)
+    
+    n = len(intervals)
+    if n < 2: return None, None
         
-    times = np.array(times)
-    
-    if len(times) < 2:
-        raise ValueError("需要至少2个失效时间点才能进行参数估计")
+    T = np.sum(intervals) # 总测试时间 = 最后一个累计时间
+    S = 0.0
+    for i in range(1, n + 1):
+        S += (i - 1) * intervals[i-1]
         
-    if np.any(times <= 0):
-        raise ValueError("失效时间间隔必须为正数")
+    Q = S / T
     
-    n = len(times)
-    p = np.sum([(i-1) * times[i-1] for i in range(1, n+1)]) / np.sum(times)
-    
-    if p <= (n-1)/2:
-        raise ValueError("无法估计模型参数，p值不符合要求")
-    
-    left = n - 1
-    right = n
-    
-    def f(x):
-        total = 0
-        for i in range(1, n+1):
-            if x <= (i-1):
-                return float('inf')  # 避免除以零
-            total += 1 / (x - (i-1))
-        if x <= p:
-            return float('-inf')  # 避免除以零
-        return total - n / (x - p)
-    
-    # 查找合适的右边界
-    while f(right) < -e_y:
-        right += 1
-    
-    # 二分法求解
-    max_iterations = 10000
-    iteration = 0
-    root = None
-    
-    while abs(right - left) > e_x and iteration < max_iterations:
-        mid = (left + right) / 2
-        f_mid = f(mid)
+    def func(N):
+        sum_term = 0.0
+        for i in range(1, n + 1):
+            denom = N - i + 1
+            if denom <= 0: return 1e9 # 避免无穷大报错
+            sum_term += 1.0 / denom
         
-        if abs(f_mid) <= e_y:
-            root = mid
+        denom_right = N - Q
+        if denom_right == 0: return 1e9
+        
+        return sum_term - n / denom_right
+
+    # 扩大搜索范围
+    left = n + 0.1
+    right = n * 10000 
+    
+    f_left = func(left)
+    
+    # 动态寻找变号区间
+    found_interval = False
+    for _ in range(100):
+        f_right = func(right)
+        if f_left * f_right < 0:
+            found_interval = True
             break
-        elif f_mid > e_y:
-            left = mid
-        else:
+        right *= 2
+        
+    # 如果无解 (数据不符合 JM 模型假设)
+    if not found_interval:
+        # 降级处理
+        N0_est = float(n) * 1.1 
+        # 重新计算 phi
+        denom = N0_est * T - S
+        phi_est = n / denom if denom > 0 else 1e-4
+        return N0_est, phi_est
+
+    # 二分法求解
+    mid = left
+    for _ in range(100):
+        mid = (left + right) / 2
+        if abs(right - left) < ex:
+            break
+        f_mid = func(mid)
+        if abs(f_mid) < ey:
+            break
+        if f_mid * f_left < 0:
             right = mid
+        else:
+            left = mid
+            f_left = f_mid
+            
+    N0_est = mid
+    denominator = N0_est * T - S
+    phi_est = n / denominator if denominator > 0 else 1e-6
         
-        iteration += 1
-    
-    # 如果循环结束还没找到精确解，使用最后一次的中点
-    if root is None:
-        # 无论是到达最大迭代还是精度满足停止条件，都使用中点作为近似根
-        root = (left + right) / 2
-    
-    N0 = root
-    phi = n / (N0 * np.sum(times) - np.sum([(i-1) * times[i-1] for i in range(1, n+1)]))
-    
-    if phi <= 0:
-        raise ValueError("估计得到的phi参数无效（<=0）")
-    
-    # 确保N0足够大，避免后续预测时出现问题
-    if N0 < n:
-        # 如果N0略小于n，稍微调整一下
-        adjustment_factor = 1.05  # 增加5%
-        N0 = max(N0 * adjustment_factor, n + 1e-6)
-        # 重新计算phi
-        phi = n / (N0 * np.sum(times) - np.sum([(i-1) * times[i-1] for i in range(1, n+1)]))
-    
-    return N0, phi
+    return N0_est, phi_est
 
-def jm_model_predict(N0, phi, times):
-    """使用JM模型参数进行预测
+# ==========================================
+# 2. 预测函数
+# ==========================================
+
+def jm_predict_future_failures(N0, phi, data, prediction_step):
+    # 同样先处理数据，获取正确的当前状态
+    cumulative_data = preprocess_data(data)
+    n = len(cumulative_data)
+    current_cumulative_time = cumulative_data[-1] if n > 0 else 0
     
-    参数:
-        N0: 初始故障数
-        phi: 故障检测率
-        times: 时间点数组
+    predicted_intervals = []
+    cumulative_times = [] 
     
-    返回:
-        预测的累计失效概率数组
-    """
-    # 输入验证
-    if not isinstance(times, (list, np.ndarray)):
-        times = np.array([times])
-    else:
-        times = np.array(times)
+    # 修正剩余故障数逻辑
+    remaining_faults = max(0, N0 - n)
     
-    if np.any(times < 0):
-        raise ValueError("时间点不能为负数")
+    warning_msg = None
+    # 如果 N0 极其巨大（例如 > 10^10），说明模型退化为常数失效率模型
+    if N0 > 1e9:
+        warning_msg = "警告：模型计算出 N0 极大，意味着数据没有表现出明显的可靠性增长。预测结果将接近平均间隔。"
+    elif remaining_faults < 1:
+        warning_msg = "警告：模型估算的剩余故障数已接近0，后续预测可能无效。"
+    
+    temp_cumulative = current_cumulative_time
+    
+    for k in range(1, prediction_step + 1):
+        # 公式: MTTF = 1 / (phi * (N0 - (n + k - 1)))
+        current_faults_found = n + k - 1
+        denom = N0 - current_faults_found
         
-    if N0 <= 0 or phi <= 0:
-        raise ValueError("模型参数N0和phi必须为正数")
-    
-    # 使用向量化运算提升效率
-    predictions = np.zeros_like(times, dtype=np.float64)
-    
-    # 处理t <= 0的情况
-    mask = times > 0
-    predictions[mask] = 1 - np.exp(-phi * (times[mask] - 1))
-    
-    return predictions
+        if denom <= 0:
+            pred_interval = 0 
+        else:
+            pred_interval = 1.0 / (phi * denom)
+            
+        predicted_intervals.append(pred_interval)
+        if pred_interval > 0:
+            temp_cumulative += pred_interval
+        cumulative_times.append(temp_cumulative)
 
-def calculate_reliability(N0, phi, times):
-    """计算系统在给定时间点的可靠度"""
-    probabilities = jm_model_predict(N0, phi, times)
-    return 1 - probabilities
-
-def jm_predict_future_failures(N0, phi, train_times, num_predictions):
-    """
-    JM模型预测未来失效
-    
-    参数:
-        N0, phi: 模型参数
-        train_times: 训练数据(历史失效时间间隔)
-        num_predictions: 要预测的未来失效次数
+    # 修正可靠度曲线计算: R(t|tn) = exp(-phi * (N0 - n) * t)
+    future_duration = sum(predicted_intervals)
+    if future_duration == 0 or future_duration > 1e6: # 防止绘图范围过大
+        future_duration = np.mean(predicted_intervals) * 10 if predicted_intervals else 100
         
-    返回:
-        dict: 包含各种预测结果
-    """
-    # 输入验证
-    if not isinstance(train_times, (list, np.ndarray)):
-        raise ValueError("train_times参数必须是列表或numpy数组")
+    t_points = np.linspace(0, future_duration, 50)
+    curr_rem = max(0, N0 - n)
+    reliability_values = [math.exp(-phi * curr_rem * t) for t in t_points]
         
-    if num_predictions < 1:
-        raise ValueError("预测步数必须至少为1")
-        
-    if N0 <= 0 or phi <= 0:
-        raise ValueError("模型参数N0和phi必须为正数")
-    
-    train_times = np.array(train_times)
-    current_failures = len(train_times)
-    current_time = np.sum(train_times)
-    
-    remaining_faults = N0 - current_failures
-    
-    # 处理边界情况，允许N0略小于current_failures
-    if remaining_faults <= 0:
-        # 如果剩余故障数为0或负数，仍然尝试预测几次
-        warning_message = f"警告：初始故障数N0({N0:.4f})小于等于已发生的故障数({current_failures})，预测结果可能不准确"
-        print(warning_message)
-
-        # 限制预测步数
-        max_possible_predictions = 3  # 即使没有剩余故障，也尝试预测3次
-        num_predictions = min(num_predictions, max_possible_predictions)
-
-        # 使用当前故障数的90%作为剩余故障数的下限（修正原始表达式的符号错误）
-        effective_remaining_faults = max(0.9 * current_failures, 1)
-
-        # 预测未来的失效时间间隔（向量化实现）
-        remaining_faults_sequence = effective_remaining_faults - np.arange(num_predictions)
-        # 确保不出现负数
-        remaining_faults_sequence = np.maximum(remaining_faults_sequence, 1e-6)
-
-        predicted_intervals = 1 / (phi * remaining_faults_sequence)
-
-        # 计算累积时间预测
-        cumulative_times = current_time + np.cumsum(predicted_intervals)
-
-        # 计算可靠度预测
-        time_points = np.linspace(0, np.sum(predicted_intervals), 100)
-        reliability_predictions = np.exp(-phi * effective_remaining_faults * time_points)
-
-        return {
-            'predicted_intervals': predicted_intervals,
-            'cumulative_times': cumulative_times,
-            'reliability_curve': (time_points, reliability_predictions),
-            'next_failure_time': cumulative_times[0] if num_predictions > 0 else None,
-            'remaining_faults': remaining_faults,
-            'warning': warning_message
-        }
-    
-    # 确保不会预测超过剩余故障数的失效
-    import math
-    # 使用向上取整，允许在剩余故障为小数时多预测一条（更乐观的策略）
-    max_possible_predictions = max(0, int(math.ceil(remaining_faults)))
-    num_predictions = min(num_predictions, max_possible_predictions)
-    
-    if num_predictions == 0:
-        return {
-            'predicted_intervals': [],
-            'cumulative_times': [],
-            'reliability_curve': (np.array([]), np.array([])),
-            'next_failure_time': None,
-            'remaining_faults': max(0, remaining_faults)
-        }
-    
-    # 预测未来的失效时间间隔（向量化实现）
-    remaining_faults_sequence = remaining_faults - np.arange(num_predictions)
-    predicted_intervals = 1 / (phi * remaining_faults_sequence)
-    
-    # 计算累积时间预测
-    cumulative_times = current_time + np.cumsum(predicted_intervals)
-    
-    # 计算可靠度预测
-    time_points = np.linspace(0, np.sum(predicted_intervals), 100)
-    reliability_predictions = np.exp(-phi * remaining_faults * time_points)
-    
     return {
+        'remaining_faults': remaining_faults,
+        'next_failure_time': cumulative_times[0] if cumulative_times else current_cumulative_time,
         'predicted_intervals': predicted_intervals,
-        'cumulative_times': cumulative_times,
-        'reliability_curve': (time_points, reliability_predictions),
-        'next_failure_time': cumulative_times[0] if num_predictions > 0 else None,
-        'remaining_faults': remaining_faults
+        'cumulative_times': cumulative_times, 
+        'reliability_curve': (t_points, reliability_values),
+        'warning': warning_msg,
+        'total_faults': N0
     }
 
-def plot_prediction_results(train_times, prediction_results):
-    """绘制预测结果并保存为图片"""
-    plt.figure(figsize=(12, 8))
-    
-    # 绘制可靠度曲线
-    time_points, reliability = prediction_results['reliability_curve']
-    plt.subplot(2, 1, 1)
-    plt.plot(time_points, reliability, 'b-', label='Reliability Curve')
-    plt.axhline(y=0.5, color='r', linestyle='--', label='50% Reliability')
-    
-    # 如果有警告信息，添加到图表中
-    if 'warning' in prediction_results:
-        plt.text(0.05, 0.05, prediction_results['warning'], 
-                transform=plt.gca().transAxes, 
-                color='red', fontweight='bold',
-                bbox=dict(facecolor='yellow', alpha=0.5))
-    
-    plt.xlabel('Time')
-    plt.ylabel('Reliability')
-    plt.title('System Reliability Over Time')
-    plt.grid(True)
-    plt.legend()
-    
-    # 绘制失效时间预测
-    plt.subplot(2, 1, 2)
-    cumulative_times = prediction_results['cumulative_times']
-    
-    if len(train_times) > 0:
-        # 历史失效时间
-        historical_times = np.cumsum(train_times)
-        plt.scatter(range(1, len(historical_times)+1), historical_times, 
-                   color='g', label='Historical Failures', s=50)
-    
-    if len(cumulative_times) > 0:
-        # 预测的失效时间
-        plt.scatter(range(len(historical_times)+1, len(historical_times)+1+len(cumulative_times)), 
-                   cumulative_times, color='r', label='Predicted Failures', s=50)
-    
-    plt.xlabel('Failure Sequence')
-    plt.ylabel('Time')
-    plt.title('Failure Time Prediction')
-    plt.grid(True)
-    plt.legend()
-    
-    plt.tight_layout()
-    # 保存图片而不是显示
-    plt.savefig('prediction_results.png', dpi=300, bbox_inches='tight')
-    print("预测结果已保存为 prediction_results.png")
+# ==========================================
+# 3. 准确率评估函数
+# ==========================================
 
-def calculate_model_accuracy(N0, phi, actual_times):
-    """计算模型预测准确率"""
-    if len(actual_times) < 2:
-        return {
-            'mae': 0.0,
-            'mse': 0.0,
-            'rmse': 0.0,
-            'r2_score': 0.0,
-            'accuracy': 0.0
-        }
+def calculate_model_accuracy(N0, phi, data):
+    # 确保使用正确的数据形式进行评估
+    actual_cumulative = preprocess_data(data)
+    n = len(actual_cumulative)
     
-    # 计算实际累积失效时间
-    actual_cumulative = np.cumsum(actual_times)
+    if n == 0: return {'mae': 0, 'mse': 0, 'rmse': 0, 'r2_score': 0, 'accuracy': 0}
+
+    predicted_cumulative = []
+    current_val = 0.0
     
-    # 计算模型预测的累积失效时间
-    predicted_cumulative = np.zeros_like(actual_cumulative)
+    # 重新模拟历史过程
+    for i in range(1, n + 1):
+        denom = N0 - (i - 1)
+        interval = 1.0 / (phi * denom) if denom > 0 else 0
+        current_val += interval
+        predicted_cumulative.append(current_val)
+        
+    predicted_cumulative = np.array(predicted_cumulative)
+    errors = actual_cumulative - predicted_cumulative
     
-    for i in range(len(actual_cumulative)):
-        t = actual_cumulative[i]
-        remaining_faults = N0 - i
-        if remaining_faults <= 0:
-            predicted_cumulative[i] = float('inf')
-        else:
-            predicted_cumulative[i] = (1/phi) * np.log(N0 / remaining_faults)
-    
-    # 计算误差指标
-    mask = predicted_cumulative != float('inf')
-    if not np.any(mask):
-        return {
-            'mae': 0.0,
-            'mse': 0.0,
-            'rmse': 0.0,
-            'r2_score': 0.0,
-            'accuracy': 0.0
-        }
-    
-    actual = actual_cumulative[mask]
-    predicted = predicted_cumulative[mask]
-    
-    mae = np.mean(np.abs(actual - predicted))
-    mse = np.mean((actual - predicted) ** 2)
+    mae = np.mean(np.abs(errors))
+    mse = np.mean(errors ** 2)
     rmse = np.sqrt(mse)
     
-    # 计算R²分数
-    ss_total = np.sum((actual - np.mean(actual)) ** 2)
-    ss_residual = np.sum((actual - predicted) ** 2)
-    r2_score = 1 - (ss_residual / ss_total) if ss_total != 0 else 0.0
+    ss_res = np.sum(errors ** 2)
+    ss_tot = np.sum((actual_cumulative - np.mean(actual_cumulative)) ** 2)
+    r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
     
-    # 计算准确率（基于相对误差）
-    relative_errors = np.abs((actual - predicted) / actual)
-    accuracy = np.mean(1 - relative_errors) * 100
+    with np.errstate(divide='ignore', invalid='ignore'):
+        mape = np.mean(np.abs(errors / actual_cumulative))
+        accuracy = max(0, (1 - mape) * 100)
     
     return {
-        'mae': mae,
-        'mse': mse,
-        'rmse': rmse,
-        'r2_score': r2_score,
-        'accuracy': accuracy
+        'mae': mae, 'mse': mse, 'rmse': rmse, 'r2_score': r2, 'accuracy': accuracy
     }
 
-def test_full_prediction():
-    """测试完整的预测流程"""
-    # 真实数据
-    train_times = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
-    
-    try:
-        # 拟合模型
-        N0, phi = jm_model_parameter_estimation(train_times)
-        print(f"拟合的JM模型参数: N0={N0:.4f}, φ={phi:.4f}")
-        
-        # 预测未来5次失效
-        num_predictions = 20
-        prediction_results = jm_predict_future_failures(N0, phi, train_times, num_predictions)
-        
-        # 打印预测结果
-        print("\n预测结果:")
-        print(f"剩余故障数: {prediction_results['remaining_faults']:.4f}")
-        print(f"下一次失效预测时间: {prediction_results['next_failure_time']:.2f}" 
-              if prediction_results['next_failure_time'] else "无剩余故障可预测")
-        
-        if 'warning' in prediction_results:
-            print(f"\n警告: {prediction_results['warning']}")
-        
-        print("\n未来失效时间间隔预测:")
-        for i, interval in enumerate(prediction_results['predicted_intervals']):
-            print(f"第{i+1}次预测失效间隔: {interval:.2f}")
-        
-        print("\n未来失效累积时间预测:")
-        for i, time in enumerate(prediction_results['cumulative_times']):
-            print(f"第{i+1}次预测失效时间: {time:.2f}")
-        
-        # 计算模型准确率
-        accuracy_metrics = calculate_model_accuracy(N0, phi, train_times)
-        print("\n模型准确率指标:")
-        print(f"平均绝对误差 (MAE): {accuracy_metrics['mae']:.2f}")
-        print(f"均方误差 (MSE): {accuracy_metrics['mse']:.2f}")
-        print(f"均方根误差 (RMSE): {accuracy_metrics['rmse']:.2f}")
-        print(f"决定系数 (R²): {accuracy_metrics['r2_score']:.4f}")
-        print(f"准确率: {accuracy_metrics['accuracy']:.2f}%")
-        
-        # 绘制预测结果
-        plot_prediction_results(train_times, prediction_results)
-        
-    except Exception as e:
-        print(f"错误: {str(e)}")
+# ==========================================
+# 4. 辅助函数
+# ==========================================
 
-if __name__ == "__main__":
-    test_full_prediction()
+def calculate_reliability(N0, phi, times):
+    times = np.array(times)
+    return np.exp(-phi * N0 * times)
+
+def plot_prediction_results(train_times, prediction_results, filename='prediction.png'):
+    plt.figure(figsize=(10, 6))
+    
+    # 使用预处理后的数据绘图
+    actual_cumulative = preprocess_data(train_times)
+    n = len(actual_cumulative)
+    plt.scatter(range(1, n + 1), actual_cumulative, color='blue', label='Actual Failures')
+    
+    pred_cumulative = prediction_results['cumulative_times']
+    if pred_cumulative:
+        start_idx = n + 1
+        end_idx = n + len(pred_cumulative)
+        plt.scatter(range(start_idx, end_idx + 1), pred_cumulative, color='red', marker='x', label='Predicted Failures')
+    
+    plt.xlabel('Failure Number')
+    plt.ylabel('Cumulative Time')
+    plt.title('JM Model Prediction')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()

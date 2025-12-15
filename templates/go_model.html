@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JM Model Analysis</title>
+    <title>GO Model Analysis</title>
     <style>
         /* 全局样式 */
         body {
@@ -323,8 +323,8 @@
                 <li class="menu-item active">
                     经典可靠性模型
                     <ul class="submenu">
-                        <li class="submenu-item active"><a href="/model/jm">JM模型</a></li>
-                        <li class="submenu-item"><a href="/model/go">GO模型</a></li>
+                        <li class="submenu-item"><a href="/model/jm">JM模型</a></li>
+                        <li class="submenu-item active"><a href="/model/go">GO模型</a></li>
                         <li class="submenu-item" style="opacity:0.6; cursor:not-allowed;">MO模型</li>
                         <li class="submenu-item" style="opacity:0.6; cursor:not-allowed;">NHPP模型</li>
                     </ul>
@@ -353,15 +353,15 @@
                 <!-- 模型简介内容 -->
                 <div id="model-intro-content" style="display: block;">
                     <div class="section">
-                        <h3>JM模型简介</h3>
-                        <p>JM模型（Jelinski-Moranda模型）是软件可靠性分析中经典的NHPP（非齐次泊松过程）模型之一，用于评估和预测软件系统的可靠性。</p>
+                        <h3>GO模型简介</h3>
+                        <p>GO模型（Goel-Okumoto模型）是软件可靠性分析中经典的NHPP（非齐次泊松过程）模型之一，由Goel和Okumoto在1979年提出，用于评估和预测软件系统的可靠性。</p>
                         
                         <h4>模型基本概念</h4>
                         <ul>
-                            <li>假设软件中初始存在N₀个故障</li>
-                            <li>每次故障修复后软件可靠性提高</li>
-                            <li>故障检测率与当前剩余故障数成正比</li>
-                            <li>模型参数包括初始故障数N₀和故障检测率φ</li>
+                            <li>假设软件中最终存在a个故障（渐近故障数）</li>
+                            <li>故障检测率随时间指数衰减</li>
+                            <li>累计失效数遵循非齐次泊松过程</li>
+                            <li>模型参数包括最终故障数a和故障检测率b</li>
                         </ul>
                         
                         <h4>模型应用场景</h4>
@@ -370,27 +370,29 @@
                             <li>剩余故障数预测</li>
                             <li>未来失效时间预测</li>
                             <li>软件发布决策支持</li>
+                            <li>测试资源分配优化</li>
                         </ul>
                         
                         <h4>模型数学表达式</h4>
-                        <p>JM模型的核心数学表达式为：</p>
+                        <p>GO模型的核心数学表达式为：</p>
                         <ul>
-                            <li>故障检测率：φ(t) = φ × (N₀ - m(t))</li>
-                            <li>累计失效函数：m(t) = N₀ × (1 - e^(-φ×t))</li>
-                            <li>可靠度函数：R(t) = e^(-φ×N₀×t)</li>
-                            <li>失效强度函数：λ(t) = φ × N₀ × e^(-φ×N₀×t)</li>
+                            <li>累计失效函数：m(t) = a × (1 - e^(-b×t))</li>
+                            <li>失效强度函数：λ(t) = a × b × e^(-b×t)</li>
+                            <li>可靠度函数：R(t) = e^(-a×(1-e^(-b×t)))</li>
+                            <li>故障检测率：随时间指数衰减</li>
                         </ul>
                         
                         <h4>模型优势</h4>
                         <ul>
-                            <li>模型结构简单，易于理解和应用</li>
-                            <li>参数估计相对稳定</li>
+                            <li>模型结构简单，参数易于估计</li>
                             <li>适用于大多数软件开发场景</li>
+                            <li>能够较好地描述软件可靠性增长过程</li>
+                            <li>预测精度较高</li>
                         </ul>
                         
                         <h4>模型局限性</h4>
                         <ul>
-                            <li>假设故障检测率与剩余故障数线性相关</li>
+                            <li>假设故障检测率随时间指数衰减</li>
                             <li>忽略故障之间的相互影响</li>
                             <li>假设故障修复完全且不引入新故障</li>
                         </ul>
@@ -454,17 +456,6 @@
                         <small>设置范围：0-100。设置模型向后预测的步数</small>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="ex">预测精度ex:</label>
-                        <input type="number" step="0.001" id="ex" name="ex" value="0.001" min="0" max="1">
-                        <small>设置范围：0-1。</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="ey">预测精度ey:</label>
-                        <input type="number" step="0.001" id="ey" name="ey" value="0.001" min="0" max="1">
-                        <small>设置范围：0-1。</small>
-                    </div>
                     
                     <button type="button" id="predict-btn">预测</button>
                     <button type="button" id="train-btn">重新训练模型</button>
@@ -530,25 +521,13 @@
         let testData = [];
         let modelTrained = false;
         
-// 数据集示例
+        // 数据集示例
         const DATASETS = {
-            // 原始 default 是间隔数据，这里已转换为累计时间 [9, 21, 32...]
-            // 这样所有数据集格式统一，避免歧义
-            'default': [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844],
-            
-
-            'dataset1': [
-                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,30, 45, 65,100, 200, 400, 700, 1200
-            ],
-
-
-
-            'dataset2': [
-                1, 2, 3, 5, 7, 9, 11, 13, 15, 17,
-                27, 37, 47, 57, 67,
-                117, 217, 417
-            ],
-        }; 
+            'default': [9,12,11,4,7,2,5,8,5,7,1,6,1,9,4,1,3,8,6,1,1,33,7,91,2,1,87,47,12,9,135,258,16,35],
+            'dataset1': [2, 4, 6, 8, 11, 14, 17, 21, 26, 32, 39, 47, 56, 66, 77, 89],
+            'dataset2': [3, 5, 7, 9, 12, 15, 18, 22, 27, 33, 40, 48, 57, 67, 78]
+        };
+        
         // 初始化图表
         function initCharts() {
             const reliabilityCtx = document.getElementById('reliability-chart').getContext('2d');
@@ -615,37 +594,26 @@
             });
         }
         
-// 更新图表数据 (修复版)
+        // 更新图表数据
         function updateCharts(reliabilityData, historicalFailures, predictedFailures) {
-            // 1. 更新可靠度图表 (保持不变)
+            // 更新可靠度图表
             if (reliabilityData && reliabilityData.length > 0) {
                 reliabilityChart.data.labels = reliabilityData.map(point => point.time);
                 reliabilityChart.data.datasets[0].data = reliabilityData.map(point => point.reliability);
                 reliabilityChart.update();
             }
             
-            // 2. 更新失效图表 (核心修复部分)
+            // 更新失效图表
             if (historicalFailures && historicalFailures.length > 0) {
-                // 处理历史数据 (已经是累计值，直接使用)
                 const historicalData = historicalFailures.map((time, index) => ({
                     x: index + 1,
                     y: time
                 }));
                 
-                // 获取历史数据的最后一个时间点，作为预测的基准
-                // 如果历史数据为空，基准为0
-                let currentCumulativeTime = historicalFailures[historicalFailures.length - 1] || 0;
-
-                // 处理预测数据 (如果是间隔时间，需要累加)
-                const predictedData = predictedFailures ? predictedFailures.map((interval, index) => {
-                    // 核心逻辑：当前累计时间 = 上一次累计时间 + 预测的间隔
-                    currentCumulativeTime += interval; 
-                    
-                    return {
-                        x: index + 1 + historicalFailures.length, // 序号接在历史后面
-                        y: currentCumulativeTime                  // 使用累加后的时间
-                    };
-                }) : [];
+                const predictedData = predictedFailures ? predictedFailures.map((time, index) => ({
+                    x: index + 1 + historicalFailures.length,
+                    y: time
+                })) : [];
                 
                 failureChart.data.datasets[0].data = historicalData;
                 failureChart.data.datasets[1].data = predictedData;
@@ -778,16 +746,14 @@
             loadingSpinner.style.display = 'block';
             
             try {
-                // 发送训练请求到新的 /api/jm/train 接口
-                fetch('/api/jm/train', {
+                // 发送训练请求到新的 /api/go/train 接口
+                fetch('/api/go/train', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        train_data: trainData,
-                        ex: parseFloat(document.getElementById('ex').value),
-                        ey: parseFloat(document.getElementById('ey').value)
+                        train_data: trainData
                     }),
                 })
                 .then(response => {
@@ -815,10 +781,10 @@
                         showMessage("模型训练成功", 'success');
 
                         // 显示模型参数
-                        if (responseData.N0 && responseData.phi) {
+                        if (responseData.a && responseData.b) {
                             document.getElementById('result-data').innerHTML = `
                                 <h4>模型训练结果</h4>
-                                <p><strong>模型参数:</strong> N0 = ${responseData.N0}, φ = ${responseData.phi}</p>
+                                <p><strong>模型参数:</strong> a = ${responseData.a}, b = ${responseData.b}</p>
                                 <p><strong>训练数据点数:</strong> ${trainData.length}</p>
                                 <p><strong>训练时间:</strong> ${new Date().toLocaleString()}</p>
                             `;
@@ -855,33 +821,21 @@
             
             try {
                 const predictionStep = parseInt(document.getElementById('prediction-step').value);
-                const ex = parseFloat(document.getElementById('ex').value);
-                const ey = parseFloat(document.getElementById('ey').value);
                 
                 // 验证输入
                 if (isNaN(predictionStep) || predictionStep < 1 || predictionStep > 100) {
                     throw new Error("预测步长必须是1-100之间的整数");
                 }
                 
-                if (isNaN(ex) || ex < 0 || ex > 1) {
-                    throw new Error("预测精度ex必须是0-1之间的数值");
-                }
-                
-                if (isNaN(ey) || ey < 0 || ey > 1) {
-                    throw new Error("预测精度ey必须是0-1之间的数值");
-                }
-                
                 const formData = {
                     data_type: document.getElementById('dataset-select').value,
                     prediction_step: predictionStep,
-                    ex: ex,
-                    ey: ey,
                     train_data: trainData,
                     test_data: testData
                 };
                 
                 // 发送预测请求
-                fetch('/api/jm/predict', {
+                fetch('/api/go/predict', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -943,7 +897,7 @@
             const resultDiv = document.getElementById('result-data');
             resultDiv.innerHTML = `
                 <h4>预测结果</h4>
-                <p><strong>模型参数:</strong> N0 = ${data.N0}, φ = ${data.phi}</p>
+                <p><strong>模型参数:</strong> a = ${data.a}, b = ${data.b}</p>
                 <p><strong>剩余故障数:</strong> ${data.remaining_faults}</p>
                 <p><strong>下一次失效预测时间:</strong> ${data.next_failure_time !== undefined ? data.next_failure_time : 'N/A'}</p>
                 <h5>未来失效时间间隔预测:</h5>

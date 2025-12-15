@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JM Model Analysis</title>
+    <title>BP Neural Network Model Analysis</title>
     <style>
         /* 全局样式 */
         body {
@@ -320,24 +320,19 @@
             <ul class="sidebar-menu">
                 <li class="menu-item"><a href="/dashboard">Dashboard</a></li>
                 <li class="menu-item"><a href="/models">Models</a></li>
-                <li class="menu-item active">
+                <li class="menu-item">
                     经典可靠性模型
                     <ul class="submenu">
-                        <li class="submenu-item active"><a href="/model/jm">JM模型</a></li>
+                        <li class="submenu-item"><a href="/model/jm">JM模型</a></li>
                         <li class="submenu-item"><a href="/model/go">GO模型</a></li>
-                        <li class="submenu-item" style="opacity:0.6; cursor:not-allowed;">MO模型</li>
-                        <li class="submenu-item" style="opacity:0.6; cursor:not-allowed;">NHPP模型</li>
                     </ul>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item active">
                     人工智能模型
                     <ul class="submenu">
-                        <li class="submenu-item"><a href="/model/bp">BP神经网络模型</a></li>
+                        <li class="submenu-item active"><a href="/model/bp">BP神经网络模型</a></li>
                     </ul>
                 </li>
-                <li class="menu-item" style="opacity:0.6; cursor:not-allowed;">时间序列模型</li>
-                <li class="menu-item" style="opacity:0.6; cursor:not-allowed;">组合加权模型</li>
-                <li class="menu-item" style="opacity:0.6; cursor:not-allowed;">SOA可靠性模型</li>
             </ul>
         </div>
         
@@ -353,46 +348,20 @@
                 <!-- 模型简介内容 -->
                 <div id="model-intro-content" style="display: block;">
                     <div class="section">
-                        <h3>JM模型简介</h3>
-                        <p>JM模型（Jelinski-Moranda模型）是软件可靠性分析中经典的NHPP（非齐次泊松过程）模型之一，用于评估和预测软件系统的可靠性。</p>
+                        <h3>BP神经网络模型简介</h3>
+                        <p>BP（Back Propagation，反向传播）神经网络是一种典型的前馈神经网络，适用于非线性函数拟合与时间序列预测。</p>
                         
-                        <h4>模型基本概念</h4>
+                        <h4>模型特点</h4>
                         <ul>
-                            <li>假设软件中初始存在N₀个故障</li>
-                            <li>每次故障修复后软件可靠性提高</li>
-                            <li>故障检测率与当前剩余故障数成正比</li>
-                            <li>模型参数包括初始故障数N₀和故障检测率φ</li>
+                            <li>能够拟合复杂的非线性关系</li>
+                            <li>可通过调整网络结构和超参数提升预测精度</li>
+                            <li>适用于软件失效时间序列等连续数据的趋势预测</li>
                         </ul>
                         
-                        <h4>模型应用场景</h4>
+                        <h4>本系统中的应用</h4>
                         <ul>
-                            <li>软件测试过程中的可靠性评估</li>
-                            <li>剩余故障数预测</li>
-                            <li>未来失效时间预测</li>
-                            <li>软件发布决策支持</li>
-                        </ul>
-                        
-                        <h4>模型数学表达式</h4>
-                        <p>JM模型的核心数学表达式为：</p>
-                        <ul>
-                            <li>故障检测率：φ(t) = φ × (N₀ - m(t))</li>
-                            <li>累计失效函数：m(t) = N₀ × (1 - e^(-φ×t))</li>
-                            <li>可靠度函数：R(t) = e^(-φ×N₀×t)</li>
-                            <li>失效强度函数：λ(t) = φ × N₀ × e^(-φ×N₀×t)</li>
-                        </ul>
-                        
-                        <h4>模型优势</h4>
-                        <ul>
-                            <li>模型结构简单，易于理解和应用</li>
-                            <li>参数估计相对稳定</li>
-                            <li>适用于大多数软件开发场景</li>
-                        </ul>
-                        
-                        <h4>模型局限性</h4>
-                        <ul>
-                            <li>假设故障检测率与剩余故障数线性相关</li>
-                            <li>忽略故障之间的相互影响</li>
-                            <li>假设故障修复完全且不引入新故障</li>
+                            <li>根据历史失效时间序列，预测未来若干次失效时间</li>
+                            <li>评估模型在验证集上的 MAE/MSE/RMSE/R² 等指标</li>
                         </ul>
                     </div>
                 </div>
@@ -400,122 +369,131 @@
                 <!-- 数据集选择区域 -->
                 <div id="dataset-content" style="display: none;">
                     <div class="dataset-section">    
-                    <h3>数据集选择</h3>
-                    
-                    <div class="form-group">
-                        <label for="dataset-select">选择数据集:</label>
-                        <select id="dataset-select">
-                            <option value="default">默认数据集</option>
-                            <option value="custom">自定义数据集</option>
-                            <option value="dataset1">数据集1 (测试数据集)</option>
-                            <option value="dataset2">数据集2 (项目数据集)</option>
-                        </select>
-                        <div class="dataset-description">
-                            选择不同的数据集进行模型训练和预测
-                        </div>
-                    </div>
-                    
-                    <div id="custom-dataset-group" style="display: none;">
+                        <h3>数据集选择</h3>
+                        
                         <div class="form-group">
-                            <label for="train-data-input">输入失效时间数据 (用逗号分隔):</label>
-                            <textarea id="train-data-input" rows="5" placeholder="例如: 9,12,11,4,7,2,5,8,5,7"></textarea>
+                            <label for="dataset-select">选择数据集:</label>
+                            <select id="dataset-select">
+                                <option value="default">默认数据集</option>
+                                <option value="custom">自定义数据集</option>
+                                <option value="dataset1">数据集1 (测试数据集)</option>
+                                <option value="dataset2">数据集2 (项目数据集)</option>
+                            </select>
                             <div class="dataset-description">
-                                输入失效时间数据，数据必须是正整数或正浮点数，以逗号分隔
+                                选择不同的数据集进行模型训练和预测
                             </div>
                         </div>
                         
-                        <div class="slider-container">
-                            <div class="slider-label">
-                                <span>训练数据比例: <span id="train-ratio-value">70%</span></span>
+                        <div id="custom-dataset-group" style="display: none;">
+                            <div class="form-group">
+                                <label for="train-data-input">输入失效时间数据 (用逗号分隔):</label>
+                                <textarea id="train-data-input" rows="5" placeholder="例如: 9,12,32,36,43,45,50,58"></textarea>
+                                <div class="dataset-description">
+                                    输入失效时间数据，数据必须是正整数或正浮点数，以逗号分隔
+                                </div>
                             </div>
-                            <input type="range" id="train-ratio-slider" min="10" max="90" value="70">
-                            <div class="dataset-description">
-                                设置用于模型训练的数据比例，剩余数据将用于验证
+                            
+                            <div class="slider-container">
+                                <div class="slider-label">
+                                    <span>训练数据比例: <span id="train-ratio-value">70%</span></span>
+                                </div>
+                                <input type="range" id="train-ratio-slider" min="10" max="90" value="70">
+                                <div class="dataset-description">
+                                    设置用于模型训练的数据比例，剩余数据将用于验证（可选）
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <button id="load-dataset-btn">加载数据集</button>
                             </div>
                         </div>
                         
-                        <div class="form-group">
-                            <button id="load-dataset-btn">加载数据集</button>
+                        <div id="dataset-preview" class="data-preview">
+                            <!-- 数据集预览将在这里显示 -->
                         </div>
-                    </div>
-                    
-                    <div id="dataset-preview" class="data-preview">
-                        <!-- 数据集预览将在这里显示 -->
-                    </div>
                     </div>
                 </div>
                 
                 <!-- 预测分析表单 -->
                 <div id="prediction-content" style="display: none;">
-                <form id="prediction-form">
-                    <div class="form-group">
-                        <label for="prediction-step">预测步长:</label>
-                        <input type="number" id="prediction-step" name="prediction-step" value="5" min="1" max="100">
-                        <small>设置范围：0-100。设置模型向后预测的步数</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="ex">预测精度ex:</label>
-                        <input type="number" step="0.001" id="ex" name="ex" value="0.001" min="0" max="1">
-                        <small>设置范围：0-1。</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="ey">预测精度ey:</label>
-                        <input type="number" step="0.001" id="ey" name="ey" value="0.001" min="0" max="1">
-                        <small>设置范围：0-1。</small>
-                    </div>
-                    
-                    <button type="button" id="predict-btn">预测</button>
-                    <button type="button" id="train-btn">重新训练模型</button>
-                </form>
-
-                <!-- 结果展示区域 -->
-                <div class="result-section">
-                    <h3>预测结果</h3>
-                    
-                    <!-- 消息区域 -->
-                    <div id="message-area">
-                        <!-- 动态消息将在这里显示 -->
-                    </div>
-                    
-                    <!-- 模型准确率指标区域 -->
-                    <div id="accuracy-metrics" class="accuracy-metrics" style="display: none;">
-                        <div class="metric-card">
-                            <h4>平均绝对误差 (MAE)</h4>
-                            <p id="mae-value">-</p>
+                    <form id="prediction-form">
+                        <div class="form-group">
+                            <label for="prediction-step">预测步长:</label>
+                            <input type="number" id="prediction-step" name="prediction-step" value="5" min="1" max="100">
+                            <small>设置范围：1-100。设置模型向后预测的失效次数</small>
                         </div>
-                        <div class="metric-card">
-                            <h4>均方误差 (MSE)</h4>
-                            <p id="mse-value">-</p>
+                        
+                        <div class="form-group">
+                            <label for="look-back">滑动窗口大小 (look_back):</label>
+                            <input type="number" id="look-back" name="look-back" value="5" min="1" max="20">
+                            <small>设置范围：1-20。用于构造时间序列输入特征</small>
                         </div>
-                        <div class="metric-card">
-                            <h4>均方根误差 (RMSE)</h4>
-                            <p id="rmse-value">-</p>
+                        
+                        <div class="form-group">
+                            <label for="hidden-size">隐含层神经元数 (hidden_size):</label>
+                            <input type="number" id="hidden-size" name="hidden-size" value="10" min="1" max="50">
+                            <small>设置范围：1-50。越大模型容量越强，但训练时间更长</small>
                         </div>
-                        <div class="metric-card">
-                            <h4>决定系数 (R²)</h4>
-                            <p id="r2-value">-</p>
+                        
+                        <div class="form-group">
+                            <label for="lr">学习率 (lr):</label>
+                            <input type="number" step="0.001" id="lr" name="lr" value="0.05" min="0.001" max="1">
+                            <small>设置范围：0-1。建议 0.001 - 0.1</small>
                         </div>
-                        <div .metric-card">
-                            <h4>模型准确率</h4>
-                            <p id="accuracy-value">-</p>
+                        
+                        <div class="form-group">
+                            <label for="epochs">训练轮数 (epochs):</label>
+                            <input type="number" id="epochs" name="epochs" value="1500" min="10" max="10000">
+                            <small>设置范围：10-10000。轮数越大，拟合能力越强但耗时较长</small>
+                        </div>
+                        
+                        <button type="button" id="train-btn">训练模型</button>
+                        <button type="button" id="predict-btn">训练并预测</button>
+                    </form>
+    
+                    <!-- 结果展示区域 -->
+                    <div class="result-section">
+                        <h3>预测结果</h3>
+                        
+                        <!-- 消息区域 -->
+                        <div id="message-area">
+                            <!-- 动态消息将在这里显示 -->
+                        </div>
+                        
+                        <!-- 模型准确率指标区域 -->
+                        <div id="accuracy-metrics" class="accuracy-metrics" style="display: none;">
+                            <div class="metric-card">
+                                <h4>平均绝对误差 (MAE)</h4>
+                                <p id="mae-value">-</p>
+                            </div>
+                            <div class="metric-card">
+                                <h4>均方误差 (MSE)</h4>
+                                <p id="mse-value">-</p>
+                            </div>
+                            <div class="metric-card">
+                                <h4>均方根误差 (RMSE)</h4>
+                                <p id="rmse-value">-</p>
+                            </div>
+                            <div class="metric-card">
+                                <h4>决定系数 (R²)</h4>
+                                <p id="r2-value">-</p>
+                            </div>
+                            <div class="metric-card">
+                                <h4>模型准确率</h4>
+                                <p id="accuracy-value">-</p>
+                            </div>
+                        </div>
+                        
+                        <!-- 图表区域 -->
+                        <div class="chart-container">
+                            <canvas id="failure-chart"></canvas>
+                        </div>
+                        
+                        <!-- Data result area -->
+                        <div id="result-data">
+                            <!-- Data table will be displayed here -->
                         </div>
                     </div>
-                    
-                    <!-- 图表区域 -->
-                    <div class="chart-container">
-                        <canvas id="reliability-chart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="failure-chart"></canvas>
-                    </div>
-                    
-                    <!-- Data result area -->
-                    <div id="result-data">
-                        <!-- Data table will be displayed here -->
-                    </div>
-                </div>
                 </div>
             </div>
         </div>
@@ -523,64 +501,21 @@
     
     <script>
         // 全局变量
-        let reliabilityChart;
         let failureChart;
         let currentDataset = [];
         let trainData = [];
         let testData = [];
         let modelTrained = false;
         
-// 数据集示例
+        // 数据集示例（可与后端 SAMPLE_FAILURE_DATA 保持风格一致）
         const DATASETS = {
-            // 原始 default 是间隔数据，这里已转换为累计时间 [9, 21, 32...]
-            // 这样所有数据集格式统一，避免歧义
-            'default': [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844],
-            
-
-            'dataset1': [
-                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,30, 45, 65,100, 200, 400, 700, 1200
-            ],
-
-
-
-            'dataset2': [
-                1, 2, 3, 5, 7, 9, 11, 13, 15, 17,
-                27, 37, 47, 57, 67,
-                117, 217, 417
-            ],
-        }; 
+            'default': [9,21,32,36,43,45,50,58,63,70,71,77,78,87,91,92,95,103,109,110,111,144,151,242,244,245,332,379,391,400,535,793,809,844],
+            'dataset1': [2, 4, 6, 8, 11, 14, 17, 21, 26, 32, 39, 47, 56, 66, 77, 89],
+            'dataset2': [3, 5, 7, 9, 12, 15, 18, 22, 27, 33, 40, 48, 57, 67, 78]
+        };
+        
         // 初始化图表
         function initCharts() {
-            const reliabilityCtx = document.getElementById('reliability-chart').getContext('2d');
-            reliabilityChart = new Chart(reliabilityCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Reliability',
-                        data: [],
-                        borderColor: 'rgb(75, 192, 192)',
-                        tension: 0.1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            min: 0,
-                            max: 1
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Time'
-                            }
-                        }
-                    }
-                }
-            });
-            
             const failureCtx = document.getElementById('failure-chart').getContext('2d');
             failureChart = new Chart(failureCtx, {
                 type: 'scatter',
@@ -607,7 +542,7 @@
                         y: {
                             title: {
                                 display: true,
-                                text: 'Time'
+                                text: 'Failure Time'
                             }
                         }
                     }
@@ -615,37 +550,18 @@
             });
         }
         
-// 更新图表数据 (修复版)
-        function updateCharts(reliabilityData, historicalFailures, predictedFailures) {
-            // 1. 更新可靠度图表 (保持不变)
-            if (reliabilityData && reliabilityData.length > 0) {
-                reliabilityChart.data.labels = reliabilityData.map(point => point.time);
-                reliabilityChart.data.datasets[0].data = reliabilityData.map(point => point.reliability);
-                reliabilityChart.update();
-            }
-            
-            // 2. 更新失效图表 (核心修复部分)
+        // 更新图表数据
+        function updateCharts(historicalFailures, predictedFailures) {
             if (historicalFailures && historicalFailures.length > 0) {
-                // 处理历史数据 (已经是累计值，直接使用)
                 const historicalData = historicalFailures.map((time, index) => ({
                     x: index + 1,
                     y: time
                 }));
                 
-                // 获取历史数据的最后一个时间点，作为预测的基准
-                // 如果历史数据为空，基准为0
-                let currentCumulativeTime = historicalFailures[historicalFailures.length - 1] || 0;
-
-                // 处理预测数据 (如果是间隔时间，需要累加)
-                const predictedData = predictedFailures ? predictedFailures.map((interval, index) => {
-                    // 核心逻辑：当前累计时间 = 上一次累计时间 + 预测的间隔
-                    currentCumulativeTime += interval; 
-                    
-                    return {
-                        x: index + 1 + historicalFailures.length, // 序号接在历史后面
-                        y: currentCumulativeTime                  // 使用累加后的时间
-                    };
-                }) : [];
+                const predictedData = predictedFailures ? predictedFailures.map((time, index) => ({
+                    x: index + 1 + historicalFailures.length,
+                    y: time
+                })) : [];
                 
                 failureChart.data.datasets[0].data = historicalData;
                 failureChart.data.datasets[1].data = predictedData;
@@ -666,7 +582,6 @@
             
             messageArea.appendChild(messageDiv);
             
-            // 如果不是错误消息，3秒后自动移除
             if (type !== 'error') {
                 setTimeout(() => {
                     messageDiv.remove();
@@ -683,7 +598,6 @@
             }
             
             try {
-                // 分割字符串并转换为数字数组
                 const numbers = input.split(',')
                     .map(item => item.trim())
                     .filter(item => item.length > 0)
@@ -695,8 +609,8 @@
                         return num;
                     });
                 
-                if (numbers.length < 2) {
-                    throw new Error("数据集至少需要包含2个数据点");
+                if (numbers.length < 6) {
+                    throw new Error("BP 模型建议至少提供 6 个以上失效时间点");
                 }
                 
                 return numbers;
@@ -742,7 +656,6 @@
                 
                 currentDataset = dataset;
                 
-                // 如果是自定义数据集，应用训练比例
                 if (datasetName === 'custom') {
                     const ratio = parseInt(document.getElementById('train-ratio-slider').value);
                     const splitResult = splitTrainTestData(dataset, ratio);
@@ -750,7 +663,6 @@
                     testData = splitResult.test;
                     showMessage(`自定义数据集加载成功，训练数据: ${trainData.length} 个, 测试数据: ${testData.length} 个`, 'success');
                 } else {
-                    // 对于预设数据集，默认使用全部数据
                     trainData = dataset;
                     testData = [];
                     showMessage(`${datasetName === 'default' ? '默认数据集' : datasetName}加载成功，共 ${dataset.length} 个数据点`, 'success');
@@ -759,6 +671,7 @@
                 updateDatasetPreview(dataset);
                 modelTrained = false;
                 
+                updateCharts(trainData, []);
                 return true;
             } catch (error) {
                 showMessage(`加载数据集失败: ${error.message}`, 'error');
@@ -766,63 +679,61 @@
             }
         }
         
-        // 训练模型
-    function trainModel() {
+        // 训练模型（仅调用后端训练接口以返回最终 loss，用于调参）
+        function trainModelOnly() {
             if (trainData.length === 0) {
                 showMessage("请先加载数据集", 'error');
                 return;
             }
             
-            // 显示加载动画
             const loadingSpinner = document.getElementById('loading-spinner');
             loadingSpinner.style.display = 'block';
             
             try {
-                // 发送训练请求到新的 /api/jm/train 接口
-                fetch('/api/jm/train', {
+                const lookBack = parseInt(document.getElementById('look-back').value);
+                const hiddenSize = parseInt(document.getElementById('hidden-size').value);
+                const lr = parseFloat(document.getElementById('lr').value);
+                const epochs = parseInt(document.getElementById('epochs').value);
+                
+                fetch('/api/bp/train', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         train_data: trainData,
-                        ex: parseFloat(document.getElementById('ex').value),
-                        ey: parseFloat(document.getElementById('ey').value)
+                        look_back: lookBack,
+                        hidden_size: hiddenSize,
+                        lr: lr,
+                        epochs: epochs
                     }),
                 })
                 .then(response => {
                     loadingSpinner.style.display = 'none';
-
+                    
                     if (!response.ok) {
                         return response.text().then(text => {
                             throw new Error(`HTTP错误: ${response.status} - ${text}`);
                         });
                     }
-
-                    try {
-                        return response.json();
-                    } catch (e) {
-                        throw new Error("服务器返回无效的JSON格式");
-                    }
+                    
+                    return response.json();
                 })
                 .then(responseData => {
                     if (!responseData) {
                         throw new Error("服务器返回空响应");
                     }
-
+                    
                     if (responseData.success) {
                         modelTrained = true;
-                        showMessage("模型训练成功", 'success');
-
-                        // 显示模型参数
-                        if (responseData.N0 && responseData.phi) {
-                            document.getElementById('result-data').innerHTML = `
-                                <h4>模型训练结果</h4>
-                                <p><strong>模型参数:</strong> N0 = ${responseData.N0}, φ = ${responseData.phi}</p>
-                                <p><strong>训练数据点数:</strong> ${trainData.length}</p>
-                                <p><strong>训练时间:</strong> ${new Date().toLocaleString()}</p>
-                            `;
-                        }
+                        showMessage(`模型训练成功，最终损失: ${responseData.final_loss.toFixed(6)}`, 'success');
+                        
+                        const resultDiv = document.getElementById('result-data');
+                        resultDiv.innerHTML = `
+                            <h4>模型训练结果</h4>
+                            <p><strong>训练数据点数:</strong> ${responseData.used_train_count || trainData.length}</p>
+                            <p><strong>损失函数最终值:</strong> ${responseData.final_loss.toFixed(6)}</p>
+                        `;
                     } else {
                         throw new Error(responseData.error || "模型训练失败");
                     }
@@ -830,58 +741,46 @@
                 .catch(error => {
                     showMessage(`训练模型失败: ${error.message}`, 'error');
                 });
-
+                
             } catch (error) {
                 loadingSpinner.style.display = 'none';
                 showMessage(`训练模型失败: ${error.message}`, 'error');
             }
         }
         
-        // 执行预测
-        function performPrediction() {
-            if (!modelTrained) {
-                showMessage("请先训练模型", 'error');
-                return;
-            }
-            
+        // 训练并预测
+        function trainAndPredict() {
             if (trainData.length === 0) {
                 showMessage("请先加载数据集", 'error');
                 return;
             }
             
-            // 显示加载动画
             const loadingSpinner = document.getElementById('loading-spinner');
             loadingSpinner.style.display = 'block';
             
             try {
                 const predictionStep = parseInt(document.getElementById('prediction-step').value);
-                const ex = parseFloat(document.getElementById('ex').value);
-                const ey = parseFloat(document.getElementById('ey').value);
+                const lookBack = parseInt(document.getElementById('look-back').value);
+                const hiddenSize = parseInt(document.getElementById('hidden-size').value);
+                const lr = parseFloat(document.getElementById('lr').value);
+                const epochs = parseInt(document.getElementById('epochs').value);
                 
-                // 验证输入
                 if (isNaN(predictionStep) || predictionStep < 1 || predictionStep > 100) {
                     throw new Error("预测步长必须是1-100之间的整数");
-                }
-                
-                if (isNaN(ex) || ex < 0 || ex > 1) {
-                    throw new Error("预测精度ex必须是0-1之间的数值");
-                }
-                
-                if (isNaN(ey) || ey < 0 || ey > 1) {
-                    throw new Error("预测精度ey必须是0-1之间的数值");
                 }
                 
                 const formData = {
                     data_type: document.getElementById('dataset-select').value,
                     prediction_step: predictionStep,
-                    ex: ex,
-                    ey: ey,
+                    look_back: lookBack,
+                    hidden_size: hiddenSize,
+                    lr: lr,
+                    epochs: epochs,
                     train_data: trainData,
                     test_data: testData
                 };
                 
-                // 发送预测请求
-                fetch('/api/jm/predict', {
+                fetch('/api/bp/predict', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -897,11 +796,7 @@
                         });
                     }
                     
-                    try {
-                        return response.json();
-                    } catch (e) {
-                        throw new Error("服务器返回无效的JSON格式");
-                    }
+                    return response.json();
                 })
                 .then(responseData => {
                     if (!responseData) {
@@ -909,9 +804,8 @@
                     }
                     
                     if (responseData.success) {
+                        modelTrained = true;
                         showMessage("预测成功完成", 'success');
-                        
-                        // 更新结果显示
                         updatePredictionResults(responseData);
                     } else {
                         throw new Error(responseData.error || "预测失败");
@@ -929,7 +823,6 @@
         
         // 更新预测结果
         function updatePredictionResults(data) {
-            // 显示准确率指标
             const accuracyMetrics = document.getElementById('accuracy-metrics');
             accuracyMetrics.style.display = 'grid';
             
@@ -939,35 +832,28 @@
             document.getElementById('r2-value').textContent = data.r2_score !== undefined ? `${data.r2_score}` : 'N/A';
             document.getElementById('accuracy-value').textContent = data.accuracy !== undefined ? `${data.accuracy}%` : 'N/A';
             
-            // 展示预测结果
             const resultDiv = document.getElementById('result-data');
             resultDiv.innerHTML = `
                 <h4>预测结果</h4>
-                <p><strong>模型参数:</strong> N0 = ${data.N0}, φ = ${data.phi}</p>
-                <p><strong>剩余故障数:</strong> ${data.remaining_faults}</p>
                 <p><strong>下一次失效预测时间:</strong> ${data.next_failure_time !== undefined ? data.next_failure_time : 'N/A'}</p>
-                <h5>未来失效时间间隔预测:</h5>
+                <h5>未来失效时间预测点:</h5>
                 <ul>
-                    ${data.predicted_intervals && data.predicted_intervals.length > 0 ? 
-                        data.predicted_intervals.map((interval, i) => `<li>第${i+1}次: ${interval}</li>`).join('') : 
+                    ${data.predicted_times && data.predicted_times.length > 0 ? 
+                        data.predicted_times.map((t, i) => `<li>第${i+1}次: ${t}</li>`).join('') : 
                         '<li>无预测数据</li>'}
                 </ul>
             `;
             
-            // 更新图表数据
             updateCharts(
-                data.reliability_curve || [],
-                data.historical_failures || trainData,
-                data.predicted_intervals || []
+                currentDataset.length > 0 ? currentDataset : trainData,
+                data.predicted_times || []
             );
         }
         
         // 初始化页面
         document.addEventListener('DOMContentLoaded', function() {
-            // 初始化图表
             initCharts();
             
-            // 数据集选择事件
             document.getElementById('dataset-select').addEventListener('change', function() {
                 const customGroup = document.getElementById('custom-dataset-group');
                 if (this.value === 'custom') {
@@ -978,46 +864,37 @@
                 }
             });
             
-            // 训练比例滑块事件
             document.getElementById('train-ratio-slider').addEventListener('input', function() {
                 document.getElementById('train-ratio-value').textContent = `${this.value}%`;
             });
             
-            // 加载数据集按钮事件
             document.getElementById('load-dataset-btn').addEventListener('click', function() {
                 loadDataset('custom');
             });
             
-            // 训练模型按钮事件
             document.getElementById('train-btn').addEventListener('click', function() {
-                trainModel();
+                trainModelOnly();
             });
             
-            // 预测按钮事件
             document.getElementById('predict-btn').addEventListener('click', function() {
-                performPrediction();
+                trainAndPredict();
             });
             
-            // 标签页切换功能
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.addEventListener('click', function() {
-                    // 更新标签状态
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     this.classList.add('active');
                     
-                    // 显示对应的内容区域
                     const tabContents = {
                         '模型简介': document.getElementById('model-intro-content'),
                         '失效数据': document.getElementById('dataset-content'),
                         '预测分析': document.getElementById('prediction-content')
                     };
                     
-                    // 隐藏所有内容
                     Object.values(tabContents).forEach(content => {
                         if (content) content.style.display = 'none';
                     });
                     
-                    // 显示选中的内容
                     const tabName = this.textContent.trim();
                     if (tabContents[tabName]) {
                         tabContents[tabName].style.display = 'block';
@@ -1025,7 +902,7 @@
                 });
             });
             
-            // 初始化显示第一个标签
+            // 默认选中第一个标签
             document.querySelectorAll('.tab')[0].click();
             // 初始加载默认数据集
             loadDataset('default');
@@ -1033,3 +910,5 @@
     </script>
 </body>
 </html>
+
+
