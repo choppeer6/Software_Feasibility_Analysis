@@ -1,75 +1,162 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}BS Architecture Management System{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='jm_model.css') }}">
-    <!-- JM unified styles (inlined to avoid caching/static loading issues) -->
+    <title>{% block title %}软件可靠性分析平台{% endblock %}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-        /* Basic page */
-        body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;background:#eef7ff;color:#333}
-        .navbar{background:linear-gradient(to right,#1a73e8,#0d47a1);color:#fff;padding:12px 20px}
-        .nav-container{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
-        .navbar-title{font-weight:600}
+        :root {
+            --primary-color: #1890ff; /* 现代科技蓝 */
+            --primary-hover: #40a9ff;
+            --sidebar-bg: #001529; /* 深色侧边栏 */
+            --sidebar-text: #rgba(255,255,255,0.65);
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #d9d9d9;
+        }
 
-        /* Layout */
-        .main-container{display:flex;min-height:calc(100vh - 60px)}
-        .sidebar{width:240px;background:#0d47a1;color:#fff}
-        .sidebar-menu{list-style:none;padding:0;margin:0}
-        .sidebar-menu li{padding:14px 18px}
-        .sidebar-menu li:hover{background:#1a73e8}
-        .sidebar-menu a{color:inherit;text-decoration:none;display:block}
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color); }
+        a { text-decoration: none; color: inherit; transition: color 0.3s; }
 
-        .content-area{flex:1;padding:20px;background:#fff}
-        .tabs{display:flex;border-bottom:1px solid #e5e5e5;margin-bottom:16px}
-        .tab{padding:10px 16px;cursor:pointer}
-        .tab.active{color:#1a73e8;border-bottom:3px solid #1a73e8}
+        /* 布局 */
+        .layout { display: flex; height: 100vh; overflow: hidden; }
+        
+        /* 侧边栏 */
+        .sidebar { width: 240px; background-color: var(--sidebar-bg); color: #fff; display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.2s; }
+        .sidebar-header { height: 64px; line-height: 64px; text-align: center; font-size: 18px; font-weight: bold; background: #002140; overflow: hidden; }
+        .sidebar-menu { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; }
+        .menu-item { padding: 0; }
+        .menu-item > a { display: block; padding: 14px 24px; color: rgba(255,255,255,0.65); }
+        .menu-item > a:hover, .menu-item.active > a { color: #fff; background-color: var(--primary-color); }
+        
+        /* 子菜单样式 */
+        .submenu-title { padding: 14px 24px; color: rgba(255,255,255,0.65); cursor: default; font-weight: 500; background: rgba(255,255,255,0.05); }
+        .submenu { list-style: none; padding: 0; background: #000c17; }
+        .submenu-item a { display: block; padding: 12px 24px 12px 48px; color: rgba(255,255,255,0.65); font-size: 14px; }
+        .submenu-item a:hover, .submenu-item.active a { color: var(--primary-color); }
 
-        /* Cards / buttons */
-        .card,.model-item{background:#ecf0f1;padding:16px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-        .btn,button{background:#1a73e8;color:#fff;padding:8px 14px;border-radius:4px;display:inline-block;text-decoration:none;border:none}
-        .btn:hover,button:hover{background:#0d63c1}
+        /* 主体区域 */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* 顶部导航 */
+        .header { height: 64px; background: #fff; box-shadow: 0 1px 4px rgba(0,21,41,0.08); display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; z-index: 10; }
+        .header-user a { color: #666; font-size: 14px; margin-left: 20px; }
+        .header-user a:hover { color: var(--primary-color); }
 
-        .result-section{margin-top:20px;padding:15px;background:#f9f9f9;border-radius:4px}
-        .footer{text-align:center;padding:18px;background:#2c3e50;color:#fff}
+        /* 内容滚动区 */
+        .content { flex: 1; overflow-y: auto; padding: 24px; }
 
-        @media(max-width:768px){.main-container{flex-direction:column}.sidebar{width:100%}}
+        /* 通用卡片样式 */
+        .card { background: var(--card-bg); border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 24px; border-top: 3px solid transparent; }
+        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        
+        /* 标题样式 */
+        h2, h3, h4 { margin-top: 0; font-weight: 500; color: #1f1f1f; }
+        h3 { margin-bottom: 20px; border-left: 4px solid var(--primary-color); padding-left: 12px; line-height: 1.4; }
+
+        /* Tabs 样式 */
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; }
+        .tab { padding: 12px 24px; cursor: pointer; font-size: 15px; position: relative; transition: all 0.3s; color: #666; }
+        .tab:hover { color: var(--primary-color); }
+        .tab.active { color: var(--primary-color); font-weight: 500; }
+        .tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background: var(--primary-color); }
+
+        /* 表单元素 */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; }
+        input[type="text"], input[type="number"], input[type="password"], textarea, select {
+            width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; transition: all 0.3s; box-sizing: border-box; font-size: 14px;
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+        
+        button {
+            background: var(--primary-color); color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; transition: all 0.3s; font-size: 14px;
+        }
+        button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        
+        /* 辅助样式 */
+        .slider-container { margin: 20px 0; padding: 15px; background: #fafafa; border-radius: 4px; }
+        .dataset-description, small { color: #999; font-size: 12px; margin-top: 4px; display: block; }
+        
+        /* 消息提示框 */
+        #message-area > div { padding: 12px 24px; margin-bottom: 16px; border-radius: 4px; border: 1px solid transparent; animation: fadeIn 0.3s; }
+        .success { background: #f6ffed; border-color: #b7eb8f !important; color: #52c41a; }
+        .error { background: #fff2f0; border-color: #ffccc7 !important; color: #ff4d4f; }
+        .warning { background: #fffbe6; border-color: #ffe58f !important; color: #faad14; }
+        .info { background: #e6f7ff; border-color: #91d5ff !important; color: #1890ff; }
+
+        /* 指标卡片网格 */
+        .accuracy-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 24px; }
+        .metric-card { background: #fafafa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #f0f0f0; transition: all 0.3s; }
+        .metric-card:hover { border-color: var(--primary-color); background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .metric-card h4 { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: normal; }
+        .metric-card p { font-size: 20px; font-weight: bold; color: var(--primary-color); margin: 0; }
+
+        /* 加载动画 */
+        .loading-spinner { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
-    <div class="navbar">
-        <div class="nav-container">
-            <div class="navbar-title">软件可靠性分析平台</div>
-            <div class="navbar-user">{% if session.username %}{{ session.username }} | <a href="{{ url_for('logout') }}" style="color:inherit; text-decoration:underline;">Logout</a>{% else %}<a href="{{ url_for('login') }}" style="color:inherit; text-decoration:underline;">Login</a>{% endif %}</div>
+    <div id="loading-spinner" class="loading-spinner">
+        <div style="text-align: center;">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px; color: #666; font-weight: 500;">系统处理中...</p>
         </div>
     </div>
 
-    <div class="main-container">
+    <div class="layout">
         <div class="sidebar">
+            <div class="sidebar-header">可靠性分析平台</div>
             <ul class="sidebar-menu">
-                <li class="menu-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                <li class="menu-item"><a href="{{ url_for('models') }}">Models</a></li>
-                <li class="menu-item"><a href="{{ url_for('dashboard') }}#data-management">Data Management</a></li>
+                <li class="menu-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <a href="{{ url_for('dashboard') }}">📊 仪表盘</a>
+                </li>
+                <li class="menu-item {% if request.endpoint == 'models' %}active{% endif %}">
+                    <a href="{{ url_for('models') }}">📚 模型库</a>
+                </li>
+                <div class="submenu-title">经典模型</div>
+                <ul class="submenu">
+                    <li class="submenu-item {% if request.endpoint == 'jm_model' %}active{% endif %}">
+                        <a href="{{ url_for('jm_model') }}">JM 模型</a>
+                    </li>
+                    <li class="submenu-item {% if request.endpoint == 'go_model' %}active{% endif %}">
+                        <a href="{{ url_for('go_model') }}">GO 模型</a>
+                    </li>
+                    <li class="submenu-item {% if request.endpoint == 'nhpp_model' %}active{% endif %}">
+                        <a href="{{ url_for('nhpp_model') }}">NHPP 模型</a>
+                    </li>
+                </ul>
+                <div class="submenu-title">智能模型</div>
+                <ul class="submenu">
+                    <li class="submenu-item {% if request.endpoint == 'bp_model' %}active{% endif %}">
+                        <a href="{{ url_for('bp_model') }}">BP 神经网络</a>
+                    </li>
+                </ul>
             </ul>
         </div>
 
-        <div class="content-area">
-            {% with messages = get_flashed_messages() %}
-                {% if messages %}
-                    {% for message in messages %}
-                        <div class="alert alert-info">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-
-            {% block content %}{% endblock %}
+        <div class="main">
+            <div class="header">
+                <div class="header-user">
+                    {% if session.username %}
+                        <span>欢迎，{{ session.username }}</span>
+                        <a href="{{ url_for('logout') }}">退出登录</a>
+                    {% else %}
+                        <a href="{{ url_for('login') }}">登录</a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
         </div>
     </div>
-
-    <footer class="footer">
-        <p>&copy; 2025 BS Architecture Management System</p>
-    </footer>
 </body>
 </html>

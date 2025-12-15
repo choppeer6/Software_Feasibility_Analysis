@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}仪表盘{% endblock %}
 
 {% block content %}
-<div class="dashboard-container">
-    <h2>Welcome, {{ username }}!</h2>
-    <p>This is your dashboard for the BS Architecture Management System.</p>
+<div class="card" style="background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); color: white;">
+    <h2 style="color: white; margin-bottom: 10px;">👋 欢迎回来, {{ session.username }}!</h2>
+    <p style="opacity: 0.9;">这里是软件可靠性分析与预测管理平台，您可以开始进行数据分析。</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+    <div class="card">
+        <h3>📊 模型分析</h3>
+        <p style="color: #666; margin-bottom: 20px; min-height: 40px;">使用 JM、GO、NHPP 等经典模型或 BP 神经网络进行数据拟合与预测。</p>
+        <a href="{{ url_for('models') }}"><button>前往模型库</button></a>
+    </div>
     
-    <div class="card-container">
-        <div class="card">
-            <h3>Model Analysis</h3>
-            <p>Perform various model analyses including JM model.</p>
-            <a href="{{ url_for('models') }}" class="btn">Go to Models</a>
-        </div>
-        
-        <div class="card" id="data-management">
-            <h3>Data Management</h3>
-            <p>Manage and view your data sets.</p>
-            <a href="{{ url_for('models') }}" class="btn">Go to Models</a>
-        </div>
+    <div class="card" id="data-management">
+        <h3>📂 数据管理</h3>
+        <p style="color: #666; margin-bottom: 20px; min-height: 40px;">上传、查看或预处理您的失效时间数据集，支持自定义数据导入。</p>
+        <a href="{{ url_for('models') }}"><button style="background-color: #52c41a;">管理数据</button></a>
     </div>
 </div>
-{% endblock %}
+{% endblock %}  

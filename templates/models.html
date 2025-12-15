@@ -1,42 +1,43 @@
 {% extends "base.html" %}
 
-{% block title %}Models - BS Architecture Management System{% endblock %}
+{% block title %}模型库{% endblock %}
 
 {% block content %}
-<div class="models-container">
-    <h2>Reliability Models</h2>
-    <p>Select a model to perform analysis:</p>
-    
-    <div class="model-list">
-        <div class="model-item">
-            <h3>JM Model</h3>
-            <p>Jumping Markov Model for software reliability analysis.</p>
-            <a href="{{ url_for('jm_model') }}" class="btn">Analyze with JM Model</a>
-        </div>
-        
-        <div class="model-item">
-            <h3>GO Model</h3>
-            <p>Goel-Okumoto Model for software reliability analysis.</p>
-            <a href="{{ url_for('go_model') }}" class="btn">Analyze with GO Model</a>
-        </div>
+<div class="card">
+    <h2 style="margin-bottom: 0;">📚 可靠性模型库</h2>
+    <p style="color: #666; margin-top: 10px;">请选择一个模型开始分析。</p>
+</div>
 
-        <div class="model-item">
-            <h3>NHPP模型</h3>
-            <p>非齐次泊松过程模型，支持指数/幂律/对数多种均值函数。</p>
-            <a href="{{ url_for('nhpp_model') }}" class="btn">Analyze with NHPP Model</a>
-        </div>
-        
-        <div class="model-item">
-            <h3>MO Model</h3>
-            <p>Modified Optimization Model for software reliability analysis.</p>
-            <button class="btn" disabled style="opacity: 0.6; cursor: not-allowed;">Coming Soon</button>
-        </div>
-        
-        <div class="model-item">
-            <h3>BP神经网络模型</h3>
-            <p>基于反向传播神经网络的软件可靠性预测模型，适用于时间序列预测。</p>
-            <a href="{{ url_for('bp_model') }}" class="btn">Analyze with BP Neural Network</a>
-        </div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
+    
+    <div class="card">
+        <h3>JM 模型</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">Jelinski-Moranda 模型。假设故障率随时间递减的经典模型。</p>
+        <a href="{{ url_for('jm_model') }}"><button style="width: 100%;">开始分析</button></a>
+    </div>
+
+    <div class="card">
+        <h3>GO 模型</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">Goel-Okumoto 模型。基于非齐次泊松过程 (NHPP) 的经典模型。</p>
+        <a href="{{ url_for('go_model') }}"><button style="width: 100%;">开始分析</button></a>
+    </div>
+    
+    <div class="card">
+        <h3>NHPP 模型</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">通用 NHPP 模型。支持指数型、幂律型等多种均值函数。</p>
+        <a href="{{ url_for('nhpp_model') }}"><button style="width: 100%;">开始分析</button></a>
+    </div>
+
+    <div class="card">
+        <h3>BP 神经网络</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">基于反向传播神经网络的非线性时间序列预测模型。</p>
+        <a href="{{ url_for('bp_model') }}"><button style="width: 100%;">开始分析</button></a>
+    </div>
+
+    <div class="card" style="opacity: 0.6; background: #f5f5f5; border-color: #eee;">
+        <h3 style="border-color: #999; color: #999;">MO 模型</h3>
+        <p style="color: #999; font-size: 14px; margin: 15px 0; height: 40px;">改进型优化模型 (Modified Optimization)。</p>
+        <button disabled style="width: 100%; background: #ccc; cursor: not-allowed;">即将上线</button>
     </div>
 </div>
 {% endblock %}

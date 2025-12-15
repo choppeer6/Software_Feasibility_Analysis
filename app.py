@@ -4,8 +4,60 @@ import sys
 import numpy as np
 from datetime import datetime
 
+# 新增数据库相关导入
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash # 用于安全的密码管理
+
+
+
 # 添加项目路径到Python路径
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '软件可行性分析'))
+
+app = Flask(__name__)
+app.secret_key = 'your-secret-key-here'
+
+# --- 数据库配置 ---
+
+# MySQL 连接 URI 格式：
+# mysql://<username>:<password>@<host>/<dbname>
+# 请替换为您在步骤 2 中设置的实际值
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://flask_user:123456@localhost/software_app_db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # 禁用警告，提升性能
+
+db = SQLAlchemy(app)
+
+# --- ORM 用户模型 ---
+class User(db.Model):
+    # 定义表名
+    __tablename__ = 'user' 
+    
+    # 定义字段/列
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    # 存储密码散列值，使用更大的长度
+    password_hash = db.Column(db.String(256), nullable=False) 
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    # 设置密码时
+    def set_password(self, password):
+        # 使用 Werkzeug 库进行密码散列
+        self.password_hash = generate_password_hash(password)
+
+    # 验证密码
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+# --------------------
+
+# 模拟用户数据库
+users = {
+    'admin': 'password123',
+    'user1': 'pass456'
+}
+
+
 
 # 导入JM模型函数
 from model.jm_model_prediction import (
@@ -41,14 +93,8 @@ from model.bp_model_prediction import (
     plot_prediction_results as bp_plot_prediction_results
 )
 
-app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'
 
-# 模拟用户数据库
-users = {
-    'admin': 'password123',
-    'user1': 'pass456'
-}
+
 
 # 示例失效数据
 SAMPLE_FAILURE_DATA = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
@@ -65,12 +111,18 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        if username in users and users[username] == password:
+        
+        # --- 数据库查找和验证 (替代字典查找) ---
+        user = User.query.filter_by(username=username).first()
+        
+        # 1. 检查用户是否存在 AND 2. 检查密码是否匹配散列值
+        if user and user.check_password(password):
             session['username'] = username
             return redirect(url_for('dashboard'))
         else:
             return render_template('login.html', error='Invalid credentials')
-    
+        # ---------------------------------------------
+        
     return render_template('login.html')
 
 @app.route('/logout')
@@ -1055,4 +1107,23 @@ if __name__ == '__main__':
     if not os.path.exists('static'):
         os.makedirs('static')
     
+
+    with app.app_context():
+        # 1. 创建所有数据库表
+        db.create_all() 
+        
+        # 2. 检查并添加初始用户 (仅在用户不存在时)
+        if not User.query.filter_by(username='admin').first():
+            admin_user = User(username='admin')
+            admin_user.set_password('password123') # 设置散列后的密码
+            db.session.add(admin_user)
+            
+        if not User.query.filter_by(username='user1').first():
+            user1 = User(username='user1')
+            user1.set_password('pass456')
+            db.session.add(user1)
+            
+        db.session.commit()
+        print("数据库表已创建，初始用户已检查/添加。")
+
     app.run(debug=True, host='0.0.0.0', port=5000)
