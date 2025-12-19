@@ -1,272 +1,110 @@
-# 可靠性分析工具
+# 软件可靠性分析与预测平台
 
-[TOC]
+本平台是一个集成多种经典软件可靠性增长模型（SRGM）的 Web 分析系统。它旨在帮助开发人员和质量保证工程师通过历史失效数据，评估软件当前的可靠性水平，并预测未来的失效趋势。
 
-## 登录
+[toc]
 
-账号：admin
-密码：password123
+## 🌟 核心功能
 
-## 运行环境
+- **多模型支持**：
+  - **JM 模型 (Jelinski-Moranda)**：经典的二项分布模型，适用于失效间隔时间分析。
+  - **GO 模型 (Goel-Okumoto)**：基于非均匀泊松过程（NHPP）的指数增长模型。
+  - **NHPP 模型**：支持多种增长曲线（如指数型、S型等）的非均匀泊松过程模型。
+  - **BP 神经网络**：利用深度学习（人工神经网络）对复杂的非线性失效序列进行时间序列预测。
+- **数据管理**：支持 CSV 文件上传、在线预览、数据集删除以及自定义数据手动输入。
+- **可视化分析**：自动生成失效预测曲线、可靠度趋势图以及模型训练损失图。
+- **精度评估**：提供 MAE、MSE、RMSE、R² Score 等多种指标，量化预测结果的准确性。
 
-- Python 3.8+（已在项目中用 Python 3.13 测试）
-- 依赖库：numpy, matplotlib, flask（如果运行 web 服务）
+## 🛠️ 技术栈
 
-## 如何启动后端服务
+- **后端**：Python 3.8+, Flask, Flask-SQLAlchemy
+- **算法库**：NumPy, Scikit-learn, SciPy
+- **前端**：HTML5, CSS3, JavaScript (原生 JS + Chart.js/ECharts 用于绘图)
+- **数据库**：SQLite (默认，无需配置即可运行)
+
+## 🚀 快速开始
+
+### 1. 环境准备
+
+建议使用 Python 3.8 及以上版本。建议创建虚拟环境：
+
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# 或
+.\venv\Scripts\activate  # Windows
+```
+
+### 2. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. 启动应用
 
 在项目根目录下执行：
 
-```powershell
+```bash
 python app.py
 ```
 
-服务默认在 `http://127.0.0.1:5000` 启动。
+应用将默认运行在：`http://127.0.0.1:5000`
 
-## API 快速调试示例
+### 4. 登录信息
 
-- 预测接口：`POST /api/jm/predict`
-  - JSON 请求示例：
+- __账号__：`admin`
+- __密码__：`password123`
 
-```json
-{
-  "data_type": "custom",
-  "prediction_step": 5,
-  "ex": 0.001,
-  "ey": 0.001,
-  "train_data": [9,12,11,4,7,2,5,8]
-}
-```
+## 📊 模型使用指南
 
-## 界面模型展示
+### 数据输入格式要求
 
-### 登录界面
+- __格式__：逗号分隔的数值序列或每行一个数值。
+- __物理含义__：__失效间隔时间 (Inter-failure times)__。例如 `[9, 12, 11]` 表示第1次失效发生在第9小时，第2次与第1次间隔12小时，依此类推。
+- __注意__：部分模型对数据量有最小要求（通常建议至少 5-10 个数据点）。
 
->http://127.0.0.1:5000/login
->
-<<<<<<< Updated upstream
+### 训练与测试划分
 
+系统支持在页面上通过滑动条调&#x6574;__&#x8BAD;练比例__（默认为 70%）。
 
-=======
->>>>>>> Stashed changes
+- __训练集__：用于估算模型参数或训练神经网络权重。
+- __测试集__：用于验证模型的预测精度。
 
-### 菜单
+## ⚠️ 注意事项与常见问题
 
-> http://127.0.0.1:5000/dashboard
->
-<<<<<<< Updated upstream
-> 
-=======
->>>>>>> Stashed changes
+1. __模型收敛性__：
 
-###  模型
+   - __JM/GO 模型__：由于使用数值优化算法（如极大似然估计），如果输入数据极不符合模型假设，可能会出现参数无法收敛的情况。
+   - __BP 模型__：作为随机梯度下降算法，多次训练的结果可能略有差异。建议根据数据量调整“滑动窗口（Look-back）”和“学习率”。
+2. __上传文件__：请确保上传的 CSV 文件编码为 `UTF-8`，且内容只包含数值和逗号/换行符。
 
-> http://127.0.0.1:5000/models
->
+   ```
+   请注意上传文件的格式
+   ```
 
+   1. ```
+      1
+      2
+      3
+      4
+      5
+      ....
+      ```
+   2. ```
+      1,2,3,4,5,....
+      ```
+3. __性能__：BP 神经网络在高轮数（Epochs）训练时会消耗一定的 CPU 资源，计算期间页面可能会有短暂延迟。
 
-#### JM模型
-> http://127.0.0.1:5000/model/jm
-<<<<<<< Updated upstream
->
-=======
+## 📁 项目结构
 
+- `app.py`: Web 服务主程序，包含路由逻辑 and API 定义。
+- `model/`: 可靠性算法核心实现。
 
-
-# 默认数据添加训练比例方法
-
-这是一个非常好的改进想法。让所有模型都支持“默认数据集”的比例划分，可以更方便地验证模型的泛化能力。
-
-基于您提供的文件，我将分别针对 **BP 神经网络模型 (`bp_model.html`)** 和 **NHPP 模型 (`nhpp_model.html`)** 提供修改方案。修改逻辑与您之前修改 JM 模型完全一致：
-
-1. **HTML层**：将滑块移出“自定义”区域，使其全局可见。
-2. **JS层**：修改加载逻辑，无论选择什么数据集，都读取滑块值进行切割。
-
-------
-
-### 1. 修改 BP 神经网络 (`bp_model.html`)
-
-BP 模型最需要划分训练集和测试集来验证效果。
-
-#### 第一步：修改 HTML (移动滑块)
-
-找到 `id="dataset-content"` 区域：
-
-1. 删除 `#custom-dataset-group` 内部的 `slider-container` div。
-2. 将其移动到 `#custom-dataset-group` 的**下方**（即同级），并添加 `onchange` 事件。
-
-HTML
-
-```
-<div id="custom-dataset-group" style="display: none;">
-    <div class="form-group">
-        <label for="train-data-input">输入失效时间数据...</label>
-        <textarea id="train-data-input" ...></textarea>
-    </div>
-    <div class="form-group">
-        <button id="load-dataset-btn">加载数据集</button>
-    </div>
-</div>
-
-<div class="slider-container" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
-    <div class="slider-label" style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-        <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">70%</strong></span>
-    </div>
-    <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width: 100%;" onchange="reloadCurrentDatasetSplit()">
-</div>
-```
-
-#### 第二步：修改 JavaScript
-
-在 `<script>` 标签内，添加/替换以下两个函数：
-
-JavaScript
-
-```
-    // 1. 【新增】辅助函数：滑块拖动时重新划分
-    function reloadCurrentDatasetSplit() {
-        const select = document.getElementById('dataset-select');
-        if (select.value !== 'custom') {
-            loadDataset(select.value);
-        } else if (document.getElementById('train-data-input').value.trim() !== "") {
-            loadDataset('custom');
-        }
-        document.getElementById('train-ratio-value').textContent = document.getElementById('train-ratio-slider').value + '%';
-    }
-
-    // 2. 【替换】loadDataset 函数 (核心修改)
-    function loadDataset(datasetName) {
-        try {
-            let dataset;
-            // 获取原始数据
-            if (datasetName === 'custom') {
-                dataset = parseCustomDataset();
-                if (!dataset) return false;
-            } else if (datasetName in DATASETS) {
-                dataset = DATASETS[datasetName];
-            } else {
-                showMessage(`未知的数据集: ${datasetName}`, 'error');
-                return false;
-            }
-            
-            currentDataset = dataset;
-            
-            // 【核心修改逻辑】：无论 datasetName 是什么，都读取滑块进行划分
-            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
-            const splitResult = splitTrainTestData(dataset, ratio);
-            
-            trainData = splitResult.train;
-            testData = splitResult.test;
-            
-            // 更新提示信息
-            const typeName = datasetName === 'default' ? '默认数据集' : (datasetName === 'custom' ? '自定义数据集' : datasetName);
-            showMessage(`${typeName} 加载成功 (训练集:${trainData.length}, 测试集:${testData.length})`, 'success');
-            
-            updateDatasetPreview(dataset);
-            
-            // 在预览区显示划分详情
-            const preview = document.getElementById('dataset-preview');
-            preview.innerHTML += `<div style="margin-top:5px; font-size:0.9em; color:green;">当前划分: 前 ${trainData.length} 个训练，后 ${testData.length} 个验证</div>`;
-            
-            modelTrained = false;
-            updateCharts(trainData, []);
-            return true;
-        } catch (error) { showMessage(`加载数据集失败: ${error.message}`, 'error'); return false; }
-    }
-```
-
-------
-
-### 2. 修改 NHPP 模型 (`nhpp_model.html`)
-
-NHPP 的代码比较紧凑，我们需要展开修改。
-
-#### 第一步：修改 HTML (移动滑块)
-
-操作同上，将滑块移出 `custom-dataset-group`。
-
-HTML
-
-```
-<div id="custom-dataset-group" style="display: none;">
-    <div class="form-group"><label>输入数据:</label><textarea id="train-data-input" rows="5"></textarea></div>
-    <button id="load-dataset-btn">加载数据</button>
-</div>
-
-<div class="slider-container" style="margin-top: 10px; padding-top:10px; border-top:1px solid #eee;">
-    <label>训练比例 <span id="train-ratio-value" style="color:#1890ff; font-weight:bold;">70%</span></label>
-    <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width:100%;" onchange="reloadCurrentDatasetSplit()">
-</div>
-```
-
-#### 第二步：修改 JavaScript
-
-NHPP 的 JS 代码写得很简略，我们需要替换 `loadDS` 函数并添加 `reloadCurrentDatasetSplit`。
-
-JavaScript
-
-```
-    // 1. 【新增】重新划分函数
-    function reloadCurrentDatasetSplit() {
-        const val = document.getElementById('dataset-select').value;
-        loadDS(val);
-        document.getElementById('train-ratio-value').innerText = document.getElementById('train-ratio-slider').value + '%';
-    }
-
-    // 2. 【替换】loadDS 函数
-    function loadDS(n) {
-        let d;
-        // 获取数据源
-        if (n === 'custom') {
-            const input = document.getElementById('train-data-input').value;
-            if (!input.trim()) return false;
-            d = input.split(',').map(Number).filter(x => x > 0);
-        } else {
-            d = DATASETS[n];
-        }
-
-        if (!d || d.length < 4) {
-            msg("无效数据 (至少需要4个点)", 'error');
-            return false;
-        }
-
-        // 获取滑块比例
-        const ratio = parseInt(document.getElementById('train-ratio-slider').value) / 100;
-        const splitIdx = Math.floor(d.length * ratio);
-        
-        // 确保训练集至少有3个点
-        const safeIdx = Math.max(3, splitIdx);
-
-        // 执行划分
-        trainData = d.slice(0, safeIdx);
-        testData = d.slice(safeIdx);
-
-        document.getElementById('dataset-preview').innerHTML = 
-            `总数据: ${d.length}点<br><span style="color:green">训练: ${trainData.length}, 验证: ${testData.length}</span>`;
-        
-        upCharts([], trainData, []);
-        msg(`加载成功 (训练比 ${Math.round(ratio*100)}%)`, 'success');
-        return true;
-    }
-    
-    // 3. 【补充】确保滑块拖动时数字变化 (可选，增强体验)
-    document.getElementById('train-ratio-slider').addEventListener('input', function() {
-        document.getElementById('train-ratio-value').innerText = this.value + '%';
-    });
-```
-
-------
-
-### 3. 关于 GO 模型
-
-虽然您没有上传 `go_model.html`，但修改逻辑与 JM 模型完全一样：
-
-1. **HTML**: 把滑块从 `display:none` 的 div 里拿出来。
-2. **JS**: 复制 JM 模型的 `loadDataset` 和 `reloadCurrentDatasetSplit` 逻辑覆盖过去即可。
-
-### 总结
-
-完成上述修改后，您的所有模型页面将具备统一的交互体验：
-
-- **默认数据集**也可以拖动滑块调整 70%/30% 或 80%/20%。
-- **后端 API** 会自动接收切割后的 `trainData` 进行训练，并使用 `testData` 计算验证集精度（MSE/MAE等）。
->>>>>>> Stashed changes
+  - `jm_model_prediction.py`: JM 模型算法。
+  - `go_model_prediction.py`: GO 模型算法。
+  - `nhpp_model_prediction.py`: NHPP 模型族算法。
+  - `bpNN.py`: 手动实现的 BP 神经网络类。
+- `templates/`: HTML 模板文件。
+- `static/`: CSS 样式及静态资源。
+- `uploads/`: 用户上传的数据集存储目录。
