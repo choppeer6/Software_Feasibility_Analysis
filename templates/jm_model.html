@@ -241,6 +241,32 @@
 
     // 修改 loadDataset 函数
     function loadDataset(datasetName) {
+
+        // 1. 处理数据库数据 (新增逻辑)
+        if (datasetName.startsWith('db:')) {
+            const id = datasetName.split(':')[1];
+            fetch(`/api/data/get/${id}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    currentDataset = data.data; // 获取到的数组
+                    // 应用滑块比例
+                    const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+                    const splitResult = splitTrainTestData(currentDataset, ratio);
+                    trainData = splitResult.train;
+                    testData = splitResult.test;
+                    
+                    showMessage(`数据库文件数据加载成功 (共${currentDataset.length}条)`, 'success');
+                    updateDatasetPreview(currentDataset);
+                    modelTrained = false;
+                } else {
+                    showMessage('加载失败: ' + data.error, 'error');
+                }
+            })
+            .catch(err => showMessage('网络错误', 'error'));
+            return true;
+        }
+
         try {
             let dataset;
             
@@ -358,6 +384,28 @@
         resultDiv.innerHTML = `<h4>预测结果</h4><p><strong>模型参数:</strong> N0 = ${data.N0}, φ = ${data.phi}</p><p><strong>剩余故障数:</strong> ${data.remaining_faults}</p><p><strong>下一次失效预测时间:</strong> ${data.next_failure_time !== undefined ? data.next_failure_time : 'N/A'}</p><h5>未来失效时间间隔预测:</h5><ul>${data.predicted_intervals && data.predicted_intervals.length > 0 ? data.predicted_intervals.map((interval, i) => `<li>第${i+1}次: ${interval}</li>`).join('') : '<li>无预测数据</li>'}</ul>`;
         updateCharts(data.reliability_curve || [], data.historical_failures || trainData, data.predicted_intervals || []);
     }
+
+    // 【新增】获取列表并填充下拉框
+    function fetchDatasetList() {
+        fetch('/api/data/list')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('dataset-select');
+                // 创建分组
+                const group = document.createElement('optgroup');
+                group.label = "我的云端数据";
+                
+                data.data.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = `db:${item.id}`; // 使用特殊前缀 db:
+                    opt.textContent = `[云端] ${item.name} (${item.count}点)`;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            }
+        });
+    }
     
     document.addEventListener('DOMContentLoaded', function() {
         initCharts();
@@ -382,6 +430,8 @@
         });
         document.querySelectorAll('.tab')[0].click();
         loadDataset('default');
+
+        fetchDatasetList();
     });
 </script>
 {% endblock %}
