@@ -83,9 +83,9 @@
 
                 <div class="slider-container" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
                     <div class="slider-label" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">70%</strong></span>
+                        <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">77%</strong></span>
                     </div>
-                    <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width: 100%;" onchange="reloadCurrentDatasetSplit()">
+                    <input type="range" id="train-ratio-slider" min="10" max="90" value="77" style="width: 100%;" onchange="reloadCurrentDatasetSplit()">
                 </div>
                 
                 <div id="dataset-preview" class="data-preview" style="margin-top: 20px; padding: 15px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 4px; color: #666;">
@@ -284,7 +284,7 @@
             currentDataset = dataset;
             
             // 2. 【核心修改】无论是什么数据集，都读取滑块比例进行划分
-            // 获取滑块当前的值 (例如 70)
+            // 获取滑块当前的值 (例如 77)
             const ratio = parseInt(document.getElementById('train-ratio-slider').value);
             
             // 调用划分函数
