@@ -31,12 +31,15 @@
             <div class="dataset-section">    
                 <h3>数据集配置</h3>
                 <div class="form-group"><label>选择数据集:</label><select id="dataset-select"><option value="default">默认</option><option value="custom">自定义</option></select></div>
-                <div id="custom-dataset-group" style="display: none;">
-                    <div class="form-group"><label>输入数据:</label><textarea id="train-data-input" rows="5"></textarea></div>
-                    <div class="slider-container"><label>训练比例 <span id="train-ratio-value">70%</span></label><input type="range" id="train-ratio-slider" min="10" max="90" value="70"></div>
-                    <button id="load-dataset-btn">加载数据</button>
-                </div>
-                <div id="dataset-preview" class="data-preview"></div>
+                    <div id="custom-dataset-group" style="display: none;">
+                        <div class="form-group"><label>输入数据:</label><textarea id="train-data-input" rows="5"></textarea></div>
+                        <button id="load-dataset-btn">加载数据</button>
+                    </div>
+
+                    <div class="slider-container" style="margin-top: 10px; padding-top:10px; border-top:1px solid #eee;">
+                        <label>训练比例 <span id="train-ratio-value" style="color:#1890ff; font-weight:bold;">70%</span></label>
+                        <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width:100%;" onchange="reloadCurrentDatasetSplit()">
+                    </div>
             </div>
         </div>
         
@@ -73,7 +76,53 @@ function init(){
 }
 function upCharts(r,h,p){ if(r.length){rChart.data.labels=r.map(x=>x.time);rChart.data.datasets[0].data=r.map(x=>x.reliability);rChart.update();} if(h.length){fChart.data.datasets[0].data=h.map((v,i)=>({x:i+1,y:v})); fChart.data.datasets[1].data=p?p.map((v,i)=>({x:i+1+h.length,y:v})):[]; fChart.update();} }
 function msg(m,t='info'){document.getElementById('message-area').innerHTML=`<div class="${t}">${m}</div>`;}
-function loadDS(n){ let d=n==='custom'?document.getElementById('train-data-input').value.split(',').map(Number).filter(x=>x>0):DATASETS[n]; if(!d||d.length<4){msg("无效数据",'error');return false;} trainData=d; testData=[]; document.getElementById('dataset-preview').innerText=`加载: ${d.length}点`; upCharts([],trainData,[]); return true; }
+// 1. 【新增】重新划分函数
+    function reloadCurrentDatasetSplit() {
+        const val = document.getElementById('dataset-select').value;
+        loadDS(val);
+        document.getElementById('train-ratio-value').innerText = document.getElementById('train-ratio-slider').value + '%';
+    }
+
+    // 2. 【替换】loadDS 函数
+    function loadDS(n) {
+        let d;
+        // 获取数据源
+        if (n === 'custom') {
+            const input = document.getElementById('train-data-input').value;
+            if (!input.trim()) return false;
+            d = input.split(',').map(Number).filter(x => x > 0);
+        } else {
+            d = DATASETS[n];
+        }
+
+        if (!d || d.length < 4) {
+            msg("无效数据 (至少需要4个点)", 'error');
+            return false;
+        }
+
+        // 获取滑块比例
+        const ratio = parseInt(document.getElementById('train-ratio-slider').value) / 100;
+        const splitIdx = Math.floor(d.length * ratio);
+        
+        // 确保训练集至少有3个点
+        const safeIdx = Math.max(3, splitIdx);
+
+        // 执行划分
+        trainData = d.slice(0, safeIdx);
+        testData = d.slice(safeIdx);
+
+        document.getElementById('dataset-preview').innerHTML = 
+            `总数据: ${d.length}点<br><span style="color:green">训练: ${trainData.length}, 验证: ${testData.length}</span>`;
+        
+        upCharts([], trainData, []);
+        msg(`加载成功 (训练比 ${Math.round(ratio*100)}%)`, 'success');
+        return true;
+    }
+    
+    // 3. 【补充】确保滑块拖动时数字变化 (可选，增强体验)
+    document.getElementById('train-ratio-slider').addEventListener('input', function() {
+        document.getElementById('train-ratio-value').innerText = this.value + '%';
+    });
 function train(){ fetch('/api/nhpp/train',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({train_data:trainData,model_type:document.getElementById('model-type-select').value})}).then(r=>r.json()).then(d=>{if(d.success)msg("训练成功",'success');else msg(d.error,'error');}); }
 function pred(){ fetch('/api/nhpp/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_type:'custom',prediction_step:document.getElementById('prediction-step').value,model_type:document.getElementById('model-type-select').value,train_data:trainData,test_data:testData})}).then(r=>r.json()).then(d=>{if(d.success){msg("预测成功",'success');document.getElementById('accuracy-metrics').style.display='grid';document.getElementById('mae-value').innerText=d.mae.toFixed(4);document.getElementById('accuracy-value').innerText=d.accuracy.toFixed(2)+'%'; upCharts(d.reliability_curve,trainData,d.cumulative_times);}else msg(d.error,'error');}); }
 document.addEventListener('DOMContentLoaded',()=>{ init(); document.getElementById('dataset-select').addEventListener('change',function(){if(this.value==='custom')document.getElementById('custom-dataset-group').style.display='block';else{document.getElementById('custom-dataset-group').style.display='none';loadDS(this.value);}}); document.getElementById('load-dataset-btn').addEventListener('click',()=>loadDS('custom')); document.getElementById('train-btn').addEventListener('click',train); document.getElementById('predict-btn').addEventListener('click',pred); document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const m={'模型简介':'model-intro-content','失效数据':'dataset-content','预测分析':'prediction-content'}; Object.values(m).forEach(i=>document.getElementById(i).style.display='none'); document.getElementById(m[this.innerText]).style.display='block'; })); loadDS('default'); });
