@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}数据管理{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>📂 数据集管理</h2>
+    <p style="color:#666;">您可以在此上传新的失效时间数据，或管理已有的数据文件。</p>
+    
+    <div style="margin-top: 20px; padding: 20px; border: 2px dashed #1890ff; border-radius: 8px; text-align: center; background: #f0f9ff;">
+        <input type="file" id="fileInput" accept=".txt,.csv" style="display: none;" onchange="handleFileSelect()">
+        <button onclick="document.getElementById('fileInput').click()" style="font-size: 16px; padding: 8px 20px;">+ 点击上传新数据</button>
+        <p id="fileNameDisplay" style="margin-top: 10px; color: #666;"></p>
+        <button id="uploadBtn" onclick="uploadFile()" style="display: none; background-color: #52c41a; margin-top: 10px;">确认上传</button>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <h3>我的数据集</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+            <tr style="background: #fafafa; border-bottom: 2px solid #eee; text-align: left;">
+                <th style="padding: 12px;">ID</th>
+                <th style="padding: 12px;">文件名</th>
+                <th style="padding: 12px;">数据量</th>
+                <th style="padding: 12px;">上传时间</th>
+                <th style="padding: 12px;">操作</th>
+            </tr>
+        </thead>
+        <tbody id="dataset-list">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    // 页面加载时获取列表
+    document.addEventListener('DOMContentLoaded', loadList);
+
+    function handleFileSelect() {
+        const file = document.getElementById('fileInput').files[0];
+        if (file) {
+            document.getElementById('fileNameDisplay').innerText = `已选文件: ${file.name}`;
+            document.getElementById('uploadBtn').style.display = 'inline-block';
+        }
+    }
+
+    function uploadFile() {
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/api/data/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('上传成功！');
+                document.getElementById('fileInput').value = '';
+                document.getElementById('fileNameDisplay').innerText = '';
+                document.getElementById('uploadBtn').style.display = 'none';
+                loadList(); // 刷新列表
+            } else {
+                alert('上传失败: ' + data.error);
+            }
+        })
+        .catch(err => alert('网络错误'));
+    }
+
+    function loadList() {
+        fetch('/api/data/list')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const tbody = document.getElementById('dataset-list');
+                tbody.innerHTML = '';
+                data.data.forEach(item => {
+                    tbody.innerHTML += `
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 12px;">${item.id}</td>
+                            <td style="padding: 12px;"><strong>${item.name}</strong></td>
+                            <td style="padding: 12px;">${item.count} 个点</td>
+                            <td style="padding: 12px; color: #888;">${item.time}</td>
+                            <td style="padding: 12px;">
+                                <button onclick="deleteDataset(${item.id})" style="background-color: #ff4d4f; padding: 4px 12px; font-size: 12px;">删除</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                if (data.data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color: #999;">暂无数据，请上传</td></tr>';
+                }
+            }
+        });
+    }
+
+    function deleteDataset(id) {
+        if (!confirm('确定要删除这个数据集吗？')) return;
+        fetch(`/api/data/delete/${id}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) loadList();
+            else alert(data.error);
+        });
+    }
+</script>
+{% endblock %}

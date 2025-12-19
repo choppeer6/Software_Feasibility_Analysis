@@ -53,6 +53,160 @@ users = {
 # 示例失效数据
 SAMPLE_FAILURE_DATA = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
 
+
+#######################################################
+
+# --- 在 app.py 顶部添加导入 ---
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.utils import secure_filename
+import os
+
+# --- 配置数据库 (放在 app = Flask(__name__) 之后) ---
+# 配置上传文件夹路径
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///reliability_data.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# --- 定义数据表模型 ---
+class Dataset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(100), nullable=False)      # 存储在磁盘上的文件名 (避免重名)
+    original_name = db.Column(db.String(100), nullable=False) # 用户上传时的原始文件名
+    upload_time = db.Column(db.DateTime, default=datetime.now)
+    data_count = db.Column(db.Integer, default=0)             # 数据点数量
+    user_id = db.Column(db.String(50), nullable=False)        # 关联的用户
+
+# 初始化数据库表
+with app.app_context():
+    db.create_all()
+
+# --- 添加数据管理路由 ---
+
+# 1. 数据管理页面
+@app.route('/data-management')
+def data_management():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('data_management.html')
+
+# 2. 上传数据 API
+@app.route('/api/data/upload', methods=['POST'])
+def upload_data():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': '无文件部分'})
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': '未选择文件'})
+
+    try:
+        # 生成唯一文件名保存到磁盘
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        safe_name = secure_filename(file.filename)
+        saved_filename = f"{session['username']}_{timestamp}_{safe_name}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+        
+        file.save(file_path)
+        
+        # 读取数据以获取点数 (简单解析逗号分隔或换行)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().replace('\n', ',')
+            # 简单的清洗逻辑
+            data_points = [x for x in content.split(',') if x.strip()]
+            count = len(data_points)
+
+        # 写入数据库
+        new_dataset = Dataset(
+            filename=saved_filename,
+            original_name=file.filename,
+            data_count=count,
+            user_id=session['username']
+        )
+        db.session.add(new_dataset)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': '上传成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# 3. 获取列表 API
+@app.route('/api/data/list', methods=['GET'])
+def list_datasets():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+        
+    # 只查询当前用户的数据
+    datasets = Dataset.query.filter_by(user_id=session['username']).order_by(Dataset.upload_time.desc()).all()
+    
+    return jsonify({
+        'success': True,
+        'data': [{
+            'id': d.id,
+            'name': d.original_name,
+            'count': d.data_count,
+            'time': d.upload_time.strftime('%Y-%m-%d %H:%M')
+        } for d in datasets]
+    })
+
+# 4. 删除数据 API
+@app.route('/api/data/delete/<int:id>', methods=['POST'])
+def delete_dataset(id):
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+        
+    dataset = Dataset.query.get_or_404(id)
+    
+    # 权限检查
+    if dataset.user_id != session['username']:
+        return jsonify({'success': False, 'error': '无权删除此文件'}), 403
+        
+    try:
+        # 删除磁盘文件
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], dataset.filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            
+        # 删除数据库记录
+        db.session.delete(dataset)
+        db.session.commit()
+        return jsonify({'success': True, 'message': '删除成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# 5. 获取具体数据内容 API (供模型页面调用)
+@app.route('/api/data/get/<int:id>', methods=['GET'])
+def get_dataset_content(id):
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+        
+    dataset = Dataset.query.get_or_404(id)
+    if dataset.user_id != session['username']:
+        return jsonify({'success': False, 'error': '无权访问'}), 403
+        
+    try:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], dataset.filename)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # 简单的解析逻辑：支持换行或逗号分隔
+            content = content.replace('\n', ',')
+            data_values = [float(x.strip()) for x in content.split(',') if x.strip() and x.strip().replace('.','',1).isdigit()]
+            
+        return jsonify({'success': True, 'data': data_values})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+    
+
+####################################################################
+
 @app.route('/')
 def index():
     if 'username' in session:
@@ -1055,4 +1209,4 @@ if __name__ == '__main__':
     if not os.path.exists('static'):
         os.makedirs('static')
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
