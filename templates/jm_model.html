@@ -74,19 +74,18 @@
                 <div id="custom-dataset-group" style="display: none;">
                     <div class="form-group">
                         <label for="train-data-input">输入失效时间数据 (用逗号分隔):</label>
-                        <textarea id="train-data-input" rows="5" placeholder="例如: 9,12,11,4,7,2,5,8,5,7"></textarea>
+                        <textarea id="train-data-input" rows="5" placeholder="例如: 9,12,11..."></textarea>
                     </div>
-                    
-                    <div class="slider-container">
-                        <div class="slider-label" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                            <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">70%</strong></span>
-                        </div>
-                        <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width: 100%;">
-                    </div>
-                    
                     <div class="form-group">
                         <button id="load-dataset-btn">加载自定义数据</button>
                     </div>
+                </div>
+
+                <div class="slider-container" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                    <div class="slider-label" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">70%</strong></span>
+                    </div>
+                    <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width: 100%;" onchange="reloadCurrentDatasetSplit()">
                 </div>
                 
                 <div id="dataset-preview" class="data-preview" style="margin-top: 20px; padding: 15px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 4px; color: #666;">
@@ -153,9 +152,9 @@
     
     // 数据集示例
     const DATASETS = {
-        'default': [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844],
-        'dataset1': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,30, 45, 65,100, 200, 400, 700, 1200],
-        'dataset2': [1, 2, 3, 5, 7, 9, 11, 13, 15, 17, 27, 37, 47, 57, 67, 117, 217, 417],
+        'default': [9,12,11,4,7,2,5,8,5,7,1,6,1,9,4,1,3,8,6,1,1,33,7,91,2,1,87,47,12,9,135,258,16,35],
+        'dataset1':[5, 1, 4, 5, 3, 1, 1, 6, 1, 1, 6, 16, 1, 4, 10, 6, 8, 2, 18, 10, 7, 1, 4, 12, 7, 7, 13, 11, 19, 19, 41, 23, 100],
+        'dataset2': [1, 30, 6, 2, 7, 3, 18, 1, 1, 14, 1, 14, 1, 10, 17, 23, 44, 7, 5, 22, 6, 12, 1, 19, 7, 10, 19, 6, 31, 14, 17, 21, 6, 1, 6, 5, 38, 5, 4, 39, 25, 10, 45, 22, 1, 7, 37, 20, 20, 36, 22, 7, 12, 10, 6, 8, 31, 55, 7, 47, 59, 27, 17, 9, 9, 17, 4, 11, 139, 58, 3, 24, 107, 259, 56, 168]
     }; 
 
     function initCharts() {
@@ -229,9 +228,23 @@
         } else { preview.innerHTML = ''; }
     }
     
+// 新增一个辅助函数，用于滑块拖动时重新划分
+    function reloadCurrentDatasetSplit() {
+        const select = document.getElementById('dataset-select');
+        if (select.value !== 'custom') {
+            loadDataset(select.value);
+        } else {
+            // 如果是自定义模式，且文本框里有内容，也重新加载
+            loadDataset('custom');
+        }
+    }
+
+    // 修改 loadDataset 函数
     function loadDataset(datasetName) {
         try {
             let dataset;
+            
+            // 1. 获取原始数据
             if (datasetName === 'custom') {
                 dataset = parseCustomDataset();
                 if (!dataset) return false;
@@ -241,24 +254,37 @@
                 showMessage(`未知的数据集: ${datasetName}`, 'error');
                 return false;
             }
+            
             currentDataset = dataset;
-            if (datasetName === 'custom') {
-                const ratio = parseInt(document.getElementById('train-ratio-slider').value);
-                const splitResult = splitTrainTestData(dataset, ratio);
-                trainData = splitResult.train;
-                testData = splitResult.test;
-                showMessage(`自定义数据集加载成功，训练数据: ${trainData.length} 个, 测试数据: ${testData.length} 个`, 'success');
-            } else {
-                trainData = dataset;
-                testData = [];
-                showMessage(`${datasetName === 'default' ? '默认数据集' : datasetName}加载成功，共 ${dataset.length} 个数据点`, 'success');
-            }
-            updateDatasetPreview(dataset);
+            
+            // 2. 【核心修改】无论是什么数据集，都读取滑块比例进行划分
+            // 获取滑块当前的值 (例如 70)
+            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+            
+            // 调用划分函数
+            const splitResult = splitTrainTestData(dataset, ratio);
+            
+            trainData = splitResult.train;
+            testData = splitResult.test;
+            
+            // 3. 更新提示信息
+            let typeName = datasetName === 'default' ? '默认数据集' : (datasetName === 'custom' ? '自定义数据集' : datasetName);
+            
+            showMessage(`${typeName}加载成功 (训练比 ${ratio}%)：训练集 ${trainData.length} 个，测试集 ${testData.length} 个`, 'success');
+            
+            updateDatasetPreview(dataset); // 这里展示全部数据
+            
+            // 可选：在预览里显示具体的划分情况
+            const preview = document.getElementById('dataset-preview');
+            preview.innerHTML += `<br><span style="color:green; font-size:0.9em;">(前 ${trainData.length} 个用于训练，后 ${testData.length} 个用于验证)</span>`;
+
             modelTrained = false;
             return true;
-        } catch (error) { showMessage(`加载数据集失败: ${error.message}`, 'error'); return false; }
+        } catch (error) { 
+            showMessage(`加载数据集失败: ${error.message}`, 'error'); 
+            return false; 
+        }
     }
-    
     function trainModel() {
         if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
         const loadingSpinner = document.getElementById('loading-spinner');
