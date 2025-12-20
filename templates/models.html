@@ -34,10 +34,22 @@
         <a href="{{ url_for('bp_model') }}"><button style="width: 100%;">开始分析</button></a>
     </div>
 
-    <div class="card" style="opacity: 0.6; background: #f5f5f5; border-color: #eee;">
-        <h3 style="border-color: #999; color: #999;">MO 模型</h3>
-        <p style="color: #999; font-size: 14px; margin: 15px 0; height: 40px;">改进型优化模型 (Modified Optimization)。</p>
-        <button disabled style="width: 100%; background: #ccc; cursor: not-allowed;">即将上线</button>
+    <div class="card">
+        <h3>ARIMA 模型</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">自回归积分滑动平均模型。适用于具有趋势和季节性的时间序列预测。</p>
+        <a href="{{ url_for('arima_model') }}"><button style="width: 100%;">开始分析</button></a>
+    </div>
+
+    <div class="card">
+        <h3>GM11 模型</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">一阶灰色预测模型。适用于小样本、信息不完全的时间序列预测。</p>
+        <a href="{{ url_for('gm11_model') }}"><button style="width: 100%;">开始分析</button></a>
+    </div>
+
+    <div class="card">
+        <h3>SVR 模型</h3>
+        <p style="color: #666; font-size: 14px; margin: 15px 0; height: 40px;">支持向量回归模型。基于支持向量机的非线性时间序列预测方法。</p>
+        <a href="{{ url_for('svr_model') }}"><button style="width: 100%;">开始分析</button></a>
     </div>
 </div>
 {% endblock %}

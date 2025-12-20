@@ -41,6 +41,27 @@ from model.bp_model_prediction import (
     plot_prediction_results as bp_plot_prediction_results
 )
 
+# 导入ARIMA模型函数
+from model.arima_model_prediction import (
+    arima_train_model,
+    arima_predict_future_failures,
+    calculate_arima_accuracy
+)
+
+# 导入GM11模型函数
+from model.gm11_model_prediction import (
+    gm11_train_model,
+    gm11_predict_future_failures,
+    calculate_gm11_accuracy
+)
+
+# 导入SVR模型函数
+from model.svr_model_prediction import (
+    svr_train_model,
+    svr_predict_future_failures,
+    calculate_svr_accuracy
+)
+
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
@@ -1201,6 +1222,350 @@ def api_nhpp_predict():
         except Exception as e:
             return jsonify({'success': False, 'error': f'模型预测错误: {str(e)}'}), 500
 
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+# ARIMA模型路由
+@app.route('/model/arima', methods=['GET', 'POST'])
+def arima_model():
+    if 'username' in session:
+        return render_template('arima_model.html')
+    return redirect(url_for('login'))
+
+# ARIMA模型API端点 - 训练
+@app.route('/api/arima/train', methods=['POST'])
+def api_arima_train():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+        
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+        
+        train_data = data.get('train_data')
+        order = data.get('order', [1, 1, 1])
+        
+        if not train_data or not isinstance(train_data, list) or len(train_data) < 5:
+            return jsonify({'success': False, 'error': 'ARIMA模型至少需要5个数据点'}), 400
+        
+        try:
+            train_data = [float(x) for x in train_data]
+            order = tuple([int(x) for x in order]) if isinstance(order, list) else order
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '数据格式错误'}), 400
+        
+        model, metrics = arima_train_model(train_data, order=order)
+        
+        return jsonify({
+            'success': True,
+            'aic': metrics.get('aic', 0.0),
+            'bic': metrics.get('bic', 0.0),
+            'order': order,
+            'used_train_count': len(train_data)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+# ARIMA模型API端点 - 预测
+@app.route('/api/arima/predict', methods=['POST'])
+def api_arima_predict():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+        
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+        
+        train_data = data.get('train_data')
+        prediction_step = data.get('prediction_step', 5)
+        order = data.get('order', [1, 1, 1])
+        
+        if not train_data or len(train_data) < 5:
+            train_data = SAMPLE_FAILURE_DATA
+        
+        try:
+            train_data = [float(x) for x in train_data]
+            prediction_step = int(prediction_step)
+            order = tuple([int(x) for x in order]) if isinstance(order, list) else order
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '参数类型错误'}), 400
+        
+        if prediction_step < 1 or prediction_step > 100:
+            return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
+        
+        model, _ = arima_train_model(train_data, order=order)
+        prediction_results = arima_predict_future_failures(model, train_data, prediction_step)
+        accuracy_metrics = calculate_arima_accuracy(model, train_data)
+        
+        return jsonify({
+            'success': True,
+            'predicted_times': [float(x) for x in prediction_results['predicted_times']],
+            'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
+            'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
+            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
+            'mae': float(accuracy_metrics['mae']),
+            'mse': float(accuracy_metrics['mse']),
+            'rmse': float(accuracy_metrics['rmse']),
+            'r2_score': float(accuracy_metrics['r2_score']),
+            'accuracy': float(accuracy_metrics['accuracy'])
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+# GM11模型路由
+@app.route('/model/gm11', methods=['GET', 'POST'])
+def gm11_model():
+    if 'username' in session:
+        return render_template('gm11_model.html')
+    return redirect(url_for('login'))
+
+# GM11模型API端点 - 训练
+@app.route('/api/gm11/train', methods=['POST'])
+def api_gm11_train():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+        
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+        
+        train_data = data.get('train_data')
+        
+        if not train_data or not isinstance(train_data, list) or len(train_data) < 4:
+            return jsonify({'success': False, 'error': 'GM11模型至少需要4个数据点'}), 400
+        
+        try:
+            train_data = [float(x) for x in train_data]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '数据格式错误'}), 400
+        
+        params = gm11_train_model(train_data)
+        
+        return jsonify({
+            'success': True,
+            'a': params['a'],
+            'b': params['b'],
+            'x0_1': params['x0_1'],
+            'used_train_count': len(train_data)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+# GM11模型API端点 - 预测
+@app.route('/api/gm11/predict', methods=['POST'])
+def api_gm11_predict():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+        
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+        
+        train_data = data.get('train_data')
+        prediction_step = data.get('prediction_step', 5)
+        
+        if not train_data or len(train_data) < 4:
+            train_data = SAMPLE_FAILURE_DATA
+        
+        try:
+            train_data = [float(x) for x in train_data]
+            prediction_step = int(prediction_step)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '参数类型错误'}), 400
+        
+        if prediction_step < 1 or prediction_step > 100:
+            return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
+        
+        params = gm11_train_model(train_data)
+        prediction_results = gm11_predict_future_failures(params, train_data, prediction_step)
+        accuracy_metrics = calculate_gm11_accuracy(params, train_data)
+        
+        return jsonify({
+            'success': True,
+            'a': float(params['a']),
+            'b': float(params['b']),
+            'predicted_times': [float(x) for x in prediction_results['predicted_times']],
+            'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
+            'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
+            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
+            'mae': float(accuracy_metrics['mae']),
+            'mse': float(accuracy_metrics['mse']),
+            'rmse': float(accuracy_metrics['rmse']),
+            'r2_score': float(accuracy_metrics['r2_score']),
+            'accuracy': float(accuracy_metrics['accuracy'])
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+# SVR模型路由
+@app.route('/model/svr', methods=['GET', 'POST'])
+def svr_model():
+    if 'username' in session:
+        return render_template('svr_model.html')
+    return redirect(url_for('login'))
+
+# SVR模型API端点 - 训练
+@app.route('/api/svr/train', methods=['POST'])
+def api_svr_train():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+        
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+        
+        train_data = data.get('train_data')
+        look_back = data.get('look_back', 5)
+        kernel = data.get('kernel', 'rbf')
+        C = data.get('C', 100.0)
+        gamma = data.get('gamma', 'scale')
+        epsilon = data.get('epsilon', 0.1)
+        
+        if not train_data or not isinstance(train_data, list) or len(train_data) < look_back + 1:
+            return jsonify({'success': False, 'error': f'SVR模型至少需要{look_back + 1}个数据点'}), 400
+        
+        try:
+            train_data = [float(x) for x in train_data]
+            look_back = int(look_back)
+            C = float(C)
+            epsilon = float(epsilon)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '参数类型错误'}), 400
+        
+        model, scaler, train_metrics = svr_train_model(
+            train_data,
+            look_back=look_back,
+            kernel=kernel,
+            C=C,
+            gamma=gamma,
+            epsilon=epsilon
+        )
+        
+        return jsonify({
+            'success': True,
+            'train_mae': train_metrics['mae'],
+            'train_mse': train_metrics['mse'],
+            'train_rmse': train_metrics['rmse'],
+            'train_r2_score': train_metrics['r2_score'],
+            'train_accuracy': train_metrics['accuracy'],
+            'used_train_count': len(train_data)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+# SVR模型API端点 - 预测
+@app.route('/api/svr/predict', methods=['POST'])
+def api_svr_predict():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+    
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+        
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+        
+        train_data = data.get('train_data')
+        prediction_step = data.get('prediction_step', 5)
+        look_back = data.get('look_back', 5)
+        kernel = data.get('kernel', 'rbf')
+        C = data.get('C', 100.0)
+        gamma = data.get('gamma', 'scale')
+        epsilon = data.get('epsilon', 0.1)
+        
+        if not train_data or len(train_data) < look_back + 1:
+            train_data = SAMPLE_FAILURE_DATA
+        
+        try:
+            train_data = [float(x) for x in train_data]
+            prediction_step = int(prediction_step)
+            look_back = int(look_back)
+            C = float(C)
+            epsilon = float(epsilon)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '参数类型错误'}), 400
+        
+        if prediction_step < 1 or prediction_step > 100:
+            return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
+        
+        model, scaler, _ = svr_train_model(
+            train_data,
+            look_back=look_back,
+            kernel=kernel,
+            C=C,
+            gamma=gamma,
+            epsilon=epsilon
+        )
+        
+        prediction_results = svr_predict_future_failures(
+            model, scaler, train_data, prediction_step, look_back
+        )
+        accuracy_metrics = calculate_svr_accuracy(model, scaler, train_data, look_back)
+        
+        return jsonify({
+            'success': True,
+            'predicted_times': [float(x) for x in prediction_results['predicted_times']],
+            'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
+            'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
+            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
+            'mae': float(accuracy_metrics['mae']),
+            'mse': float(accuracy_metrics['mse']),
+            'rmse': float(accuracy_metrics['rmse']),
+            'r2_score': float(accuracy_metrics['r2_score']),
+            'accuracy': float(accuracy_metrics['accuracy'])
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 

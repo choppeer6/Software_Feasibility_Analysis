@@ -121,7 +121,7 @@
                 <li class="menu-item {% if request.endpoint == 'models' %}active{% endif %}">
                     <a href="{{ url_for('models') }}">📚 模型库</a>
                 </li>
-                <div class="submenu-title">经典模型</div>
+                <div class="submenu-title">经典可靠性增长模型</div>
                 <ul class="submenu">
                     <li class="submenu-item {% if request.endpoint == 'jm_model' %}active{% endif %}">
                         <a href="{{ url_for('jm_model') }}">JM 模型</a>
@@ -133,10 +133,22 @@
                         <a href="{{ url_for('nhpp_model') }}">NHPP 模型</a>
                     </li>
                 </ul>
-                <div class="submenu-title">智能模型</div>
+                <div class="submenu-title">基于时间序列的软件可靠性模型</div>
+                <ul class="submenu">
+                    <li class="submenu-item {% if request.endpoint == 'arima_model' %}active{% endif %}">
+                        <a href="{{ url_for('arima_model') }}">ARIMA 模型</a>
+                    </li>
+                    <li class="submenu-item {% if request.endpoint == 'gm11_model' %}active{% endif %}">
+                        <a href="{{ url_for('gm11_model') }}">GM11 模型</a>
+                    </li>
+                </ul>
+                <div class="submenu-title">基于智能算法的软件可靠性模型</div>
                 <ul class="submenu">
                     <li class="submenu-item {% if request.endpoint == 'bp_model' %}active{% endif %}">
                         <a href="{{ url_for('bp_model') }}">BP 神经网络</a>
+                    </li>
+                    <li class="submenu-item {% if request.endpoint == 'svr_model' %}active{% endif %}">
+                        <a href="{{ url_for('svr_model') }}">SVR 模型</a>
                     </li>
                 </ul>
             </ul>

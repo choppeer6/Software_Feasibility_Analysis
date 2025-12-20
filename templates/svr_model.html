@@ -1,0 +1,519 @@
+{% extends "base.html" %}
+
+{% block title %}SVR 模型分析{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="tabs">
+        <div class="tab active">模型简介</div>
+        <div class="tab">失效数据</div>
+        <div class="tab">预测分析</div>
+    </div>
+    
+    <div class="tab-content">
+        <div id="model-intro-content" style="display: block;">
+            <div class="section">
+                <h3>SVR模型简介</h3>
+                <p>SVR（Support Vector Regression，支持向量回归）是基于支持向量机（SVM）的回归方法，适用于非线性时间序列预测。</p>
+                
+                <h4>模型基本概念</h4>
+                <ul>
+                    <li>利用核函数将数据映射到高维空间进行回归</li>
+                    <li>通过支持向量确定回归超平面</li>
+                    <li>使用ε-不敏感损失函数，对异常值具有鲁棒性</li>
+                    <li>支持多种核函数：RBF、线性、多项式等</li>
+                </ul>
+                
+                <h4>模型应用场景</h4>
+                <ul>
+                    <li>非线性失效时间序列预测</li>
+                    <li>复杂模式的可靠性分析</li>
+                    <li>短期失效间隔预测</li>
+                    <li>需要处理非线性关系的时间序列数据</li>
+                </ul>
+                
+                <h4>模型优势</h4>
+                <ul>
+                    <li>能够处理非线性关系</li>
+                    <li>对异常值具有较好的鲁棒性</li>
+                    <li>通过核函数可以适应不同的数据分布</li>
+                    <li>泛化能力较强</li>
+                </ul>
+                
+                <h4>模型局限性</h4>
+                <ul>
+                    <li>参数选择（C、gamma、epsilon）需要调优</li>
+                    <li>计算复杂度相对较高</li>
+                    <li>需要足够的历史数据（至少look_back+1个点）</li>
+                    <li>对大规模数据集的训练时间较长</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div id="dataset-content" style="display: none;">
+            <div class="dataset-section">    
+                <h3>数据集配置</h3>
+                <div class="form-group">
+                    <label for="dataset-select">选择数据集:</label>
+                    <select id="dataset-select">
+                        <option value="default">默认数据集</option>
+                        <option value="custom">自定义数据集</option>
+                        <option value="dataset1">数据集1 (测试数据集)</option>
+                        <option value="dataset2">数据集2 (项目数据集)</option>
+                    </select>
+                </div>
+                
+                <div id="custom-dataset-group" style="display: none;">
+                    <div class="form-group">
+                        <label for="train-data-input">输入失效时间数据 (用逗号分隔):</label>
+                        <textarea id="train-data-input" rows="5" placeholder="例如: 9,12,11..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <button id="load-dataset-btn">加载自定义数据</button>
+                    </div>
+                </div>
+
+                <div class="slider-container" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                    <div class="slider-label" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">70%</strong></span>
+                    </div>
+                    <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width: 100%;" onchange="reloadCurrentDatasetSplit()">
+                </div>
+                
+                <div id="dataset-preview" class="data-preview" style="margin-top: 20px; padding: 15px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 4px; color: #666;">
+                </div>
+            </div>
+        </div>
+        
+        <div id="prediction-content" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="prediction-step">预测步长:</label>
+                    <input type="number" id="prediction-step" name="prediction-step" value="5" min="1" max="100">
+                </div>
+                
+                <div class="form-group">
+                    <label for="look-back">滑动窗口 (look_back):</label>
+                    <input type="number" id="look-back" name="look-back" value="5" min="1" max="20">
+                </div>
+                
+                <div class="form-group">
+                    <label for="kernel">核函数:</label>
+                    <select id="kernel" name="kernel">
+                        <option value="rbf">RBF (径向基函数)</option>
+                        <option value="linear">线性</option>
+                        <option value="poly">多项式</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="C">正则化参数 (C):</label>
+                    <input type="number" step="0.1" id="C" name="C" value="100" min="0.1" max="1000">
+                </div>
+                
+                <div class="form-group">
+                    <label for="gamma">核函数参数 (gamma):</label>
+                    <select id="gamma" name="gamma">
+                        <option value="scale">scale (自动)</option>
+                        <option value="auto">auto</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="epsilon">ε-不敏感参数:</label>
+                    <input type="number" step="0.01" id="epsilon" name="epsilon" value="0.1" min="0.01" max="1">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px;">
+                <button type="button" id="train-btn" style="margin-right: 15px;">仅训练模型</button>
+                <button type="button" id="predict-btn" style="background-color: #52c41a;">训练并预测</button>
+            </div>
+
+            <div class="result-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                <h3>分析结果</h3>
+                
+                <div id="message-area"></div>
+                
+                <div id="accuracy-metrics" class="accuracy-metrics" style="display: none;">
+                    <div class="metric-card"><h4>平均绝对误差 (MAE)</h4><p id="mae-value">-</p></div>
+                    <div class="metric-card"><h4>均方误差 (MSE)</h4><p id="mse-value">-</p></div>
+                    <div class="metric-card"><h4>均方根误差 (RMSE)</h4><p id="rmse-value">-</p></div>
+                    <div class="metric-card"><h4>决定系数 (R²)</h4><p id="r2-value">-</p></div>
+                    <div class="metric-card"><h4>模型准确率</h4><p id="accuracy-value">-</p></div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 30px;">
+                    <div style="height: 400px;"><canvas id="failure-chart"></canvas></div>
+                    <div style="height: 400px;"><canvas id="prediction-chart"></canvas></div>
+                </div>
+                
+                <div id="result-data" style="margin-top: 20px; background: #f9f9f9; padding: 20px; border-radius: 4px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let failureChart;
+    let predictionChart;
+    let currentDataset = [];
+    let trainData = [];
+    let testData = [];
+    let modelTrained = false;
+    
+    const DATASETS = {
+        'default': [9,12,11,4,7,2,5,8,5,7,1,6,1,9,4,1,3,8,6,1,1,33,7,91,2,1,87,47,12,9,135,258,16,35],
+        'dataset1':[5, 1, 4, 5, 3, 1, 1, 6, 1, 1, 6, 16, 1, 4, 10, 6, 8, 2, 18, 10, 7, 1, 4, 12, 7, 7, 13, 11, 19, 19, 41, 23, 100],
+        'dataset2': [1, 30, 6, 2, 7, 3, 18, 1, 1, 14, 1, 14, 1, 10, 17, 23, 44, 7, 5, 22, 6, 12, 1, 19, 7, 10, 19, 6, 31, 14, 17, 21, 6, 1, 6, 5, 38, 5, 4, 39, 25, 10, 45, 22, 1, 7, 37, 20, 20, 36, 22, 7, 12, 10, 6, 8, 31, 55, 7, 47, 59, 27, 17, 9, 9, 17, 4, 11, 139, 58, 3, 24, 107, 259, 56, 168]
+    };
+
+    function initCharts() {
+        const failureCtx = document.getElementById('failure-chart').getContext('2d');
+        failureChart = new Chart(failureCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '历史失效时间',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: '失效序号' } },
+                    y: { title: { display: true, text: '失效时间' } }
+                }
+            }
+        });
+        
+        const predictionCtx = document.getElementById('prediction-chart').getContext('2d');
+        predictionChart = new Chart(predictionCtx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: '历史失效',
+                    data: [],
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)'
+                }, {
+                    label: '预测失效',
+                    data: [],
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: '失效序号' } },
+                    y: { title: { display: true, text: '失效时间' } }
+                }
+            }
+        });
+    }
+    
+    function updateCharts(historicalFailures, predictedFailures) {
+        if (historicalFailures && historicalFailures.length > 0) {
+            failureChart.data.labels = historicalFailures.map((_, i) => i + 1);
+            failureChart.data.datasets[0].data = historicalFailures;
+            failureChart.update();
+            
+            const historicalData = historicalFailures.map((time, index) => ({ x: index + 1, y: time }));
+            const predictedData = predictedFailures ? predictedFailures.map((time, index) => ({
+                x: index + 1 + historicalFailures.length,
+                y: time
+            })) : [];
+            
+            predictionChart.data.datasets[0].data = historicalData;
+            predictionChart.data.datasets[1].data = predictedData;
+            predictionChart.update();
+        }
+    }
+    
+    function showMessage(message, type = 'info') {
+        const messageArea = document.getElementById('message-area');
+        messageArea.innerHTML = '';
+        const messageDiv = document.createElement('div');
+        messageDiv.className = type;
+        messageDiv.innerHTML = `<strong>${type === 'error' ? '错误' : type === 'warning' ? '警告' : type === 'success' ? '成功' : '信息'}:</strong> ${message}`;
+        messageArea.appendChild(messageDiv);
+        if (type !== 'error') setTimeout(() => { messageDiv.remove(); }, 3000);
+    }
+    
+    function parseCustomDataset() {
+        const input = document.getElementById('train-data-input').value.trim();
+        if (!input) { showMessage("请输入失效时间数据", 'error'); return null; }
+        try {
+            const numbers = input.split(',').map(item => item.trim()).filter(item => item.length > 0).map(item => {
+                const num = parseFloat(item);
+                if (isNaN(num) || num <= 0) throw new Error(`无效的数值: ${item}`);
+                return num;
+            });
+            const lookBack = parseInt(document.getElementById('look-back').value);
+            if (numbers.length < lookBack + 1) throw new Error(`SVR模型至少需要${lookBack + 1}个数据点`);
+            return numbers;
+        } catch (error) { showMessage(error.message, 'error'); return null; }
+    }
+    
+    function splitTrainTestData(dataset, ratio) {
+        const splitIndex = Math.floor(dataset.length * ratio / 100);
+        return { train: dataset.slice(0, splitIndex), test: dataset.slice(splitIndex) };
+    }
+    
+    function updateDatasetPreview(dataset) {
+        const preview = document.getElementById('dataset-preview');
+        if (dataset.length > 0) {
+            preview.innerHTML = `<strong>数据集预览:</strong> [${dataset.slice(0, 10).join(', ')}${dataset.length > 10 ? ', ...' : ''}] (共 ${dataset.length} 个数据点)`;
+        } else { preview.innerHTML = ''; }
+    }
+
+    function reloadCurrentDatasetSplit() {
+        const select = document.getElementById('dataset-select');
+        if (select.value !== 'custom') {
+            loadDataset(select.value);
+        } else {
+            loadDataset('custom');
+        }
+    }
+
+    function loadDataset(datasetName) {
+        if (datasetName.startsWith('db:')) {
+            const id = datasetName.split(':')[1];
+            fetch(`/api/data/get/${id}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    currentDataset = data.data;
+                    const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+                    const splitResult = splitTrainTestData(currentDataset, ratio);
+                    trainData = splitResult.train;
+                    testData = splitResult.test;
+                    showMessage(`数据库文件数据加载成功 (共${currentDataset.length}条)`, 'success');
+                    updateDatasetPreview(currentDataset);
+                    modelTrained = false;
+                } else {
+                    showMessage('加载失败: ' + data.error, 'error');
+                }
+            })
+            .catch(err => showMessage('网络错误', 'error'));
+            return true;
+        }
+
+        try {
+            let dataset;
+            if (datasetName === 'custom') {
+                dataset = parseCustomDataset();
+                if (!dataset) return false;
+            } else if (datasetName in DATASETS) {
+                dataset = DATASETS[datasetName];
+            } else {
+                showMessage(`未知的数据集: ${datasetName}`, 'error');
+                return false;
+            }
+            
+            currentDataset = dataset;
+            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+            const splitResult = splitTrainTestData(dataset, ratio);
+            trainData = splitResult.train;
+            testData = splitResult.test;
+            
+            showMessage(`数据集加载成功 (训练比 ${ratio}%)：训练集 ${trainData.length} 个，测试集 ${testData.length} 个`, 'success');
+            updateDatasetPreview(dataset);
+            modelTrained = false;
+            return true;
+        } catch (error) { 
+            showMessage(`加载数据集失败: ${error.message}`, 'error'); 
+            return false; 
+        }
+    }
+    
+    function trainModel() {
+        if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
+        const loadingSpinner = document.getElementById('loading-spinner');
+        loadingSpinner.style.display = 'flex';
+        try {
+            const lookBack = parseInt(document.getElementById('look-back').value);
+            const kernel = document.getElementById('kernel').value;
+            const C = parseFloat(document.getElementById('C').value);
+            const gamma = document.getElementById('gamma').value === 'auto' ? 'auto' : (document.getElementById('gamma').value === 'scale' ? 'scale' : parseFloat(document.getElementById('gamma').value));
+            const epsilon = parseFloat(document.getElementById('epsilon').value);
+            
+            if (trainData.length < lookBack + 1) {
+                showMessage(`训练数据至少需要${lookBack + 1}个数据点`, 'error');
+                loadingSpinner.style.display = 'none';
+                return;
+            }
+            
+            fetch('/api/svr/train', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', },
+                body: JSON.stringify({
+                    train_data: trainData,
+                    look_back: lookBack,
+                    kernel: kernel,
+                    C: C,
+                    gamma: gamma,
+                    epsilon: epsilon
+                }),
+            })
+            .then(response => {
+                loadingSpinner.style.display = 'none';
+                if (!response.ok) return response.text().then(text => { throw new Error(`HTTP错误: ${response.status} - ${text}`); });
+                return response.json();
+            })
+            .then(responseData => {
+                if (!responseData) throw new Error("服务器返回空响应");
+                if (responseData.success) {
+                    modelTrained = true;
+                    showMessage("模型训练成功", 'success');
+                    document.getElementById('result-data').innerHTML = 
+                        `<h4>模型训练结果</h4>
+                        <p><strong>训练数据点数:</strong> ${trainData.length}</p>
+                        <p><strong>滑动窗口:</strong> ${lookBack}</p>
+                        <p><strong>核函数:</strong> ${kernel}</p>
+                        <p><strong>训练集MAE:</strong> ${responseData.train_mae ? responseData.train_mae.toFixed(4) : 'N/A'}</p>`;
+                } else { throw new Error(responseData.error || "模型训练失败"); }
+            })
+            .catch(error => { loadingSpinner.style.display = 'none'; showMessage(`训练模型失败: ${error.message}`, 'error'); });
+        } catch (error) { loadingSpinner.style.display = 'none'; showMessage(`训练模型失败: ${error.message}`, 'error'); }
+    }
+    
+    function performPrediction() {
+        if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
+        const loadingSpinner = document.getElementById('loading-spinner');
+        loadingSpinner.style.display = 'flex';
+        try {
+            const predictionStep = parseInt(document.getElementById('prediction-step').value);
+            const lookBack = parseInt(document.getElementById('look-back').value);
+            const kernel = document.getElementById('kernel').value;
+            const C = parseFloat(document.getElementById('C').value);
+            const gamma = document.getElementById('gamma').value === 'auto' ? 'auto' : (document.getElementById('gamma').value === 'scale' ? 'scale' : parseFloat(document.getElementById('gamma').value));
+            const epsilon = parseFloat(document.getElementById('epsilon').value);
+            
+            if (isNaN(predictionStep) || predictionStep < 1 || predictionStep > 100) throw new Error("预测步长必须是1-100之间的整数");
+            
+            const formData = {
+                data_type: document.getElementById('dataset-select').value,
+                prediction_step: predictionStep,
+                look_back: lookBack,
+                kernel: kernel,
+                C: C,
+                gamma: gamma,
+                epsilon: epsilon,
+                train_data: trainData,
+                test_data: testData
+            };
+            
+            fetch('/api/svr/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', },
+                body: JSON.stringify(formData),
+            })
+            .then(response => {
+                loadingSpinner.style.display = 'none';
+                if (!response.ok) return response.text().then(text => { throw new Error(`HTTP错误: ${response.status} - ${text}`); });
+                return response.json();
+            })
+            .then(responseData => {
+                if (!responseData) throw new Error("服务器返回空响应");
+                if (responseData.success) {
+                    showMessage("预测成功完成", 'success');
+                    updatePredictionResults(responseData);
+                } else { throw new Error(responseData.error || "预测失败"); }
+            })
+            .catch(error => { loadingSpinner.style.display = 'none'; showMessage(`预测失败: ${error.message}`, 'error'); });
+        } catch (error) { loadingSpinner.style.display = 'none'; showMessage(error.message, 'error'); }
+    }
+    
+    function updatePredictionResults(data) {
+        const accuracyMetrics = document.getElementById('accuracy-metrics');
+        accuracyMetrics.style.display = 'grid';
+        document.getElementById('mae-value').textContent = data.mae !== undefined ? `${data.mae}` : 'N/A';
+        document.getElementById('mse-value').textContent = data.mse !== undefined ? `${data.mse}` : 'N/A';
+        document.getElementById('rmse-value').textContent = data.rmse !== undefined ? `${data.rmse}` : 'N/A';
+        document.getElementById('r2-value').textContent = data.r2_score !== undefined ? `${data.r2_score}` : 'N/A';
+        document.getElementById('accuracy-value').textContent = data.accuracy !== undefined ? `${data.accuracy}%` : 'N/A';
+        
+        const resultDiv = document.getElementById('result-data');
+        resultDiv.innerHTML = `
+            <h4>预测结果</h4>
+            <p><strong>下一次失效预测时间:</strong> ${data.next_failure_time !== undefined ? data.next_failure_time.toFixed(2) : 'N/A'}</p>
+            <h5>未来失效时间预测点:</h5>
+            <ul>
+                ${data.predicted_times && data.predicted_times.length > 0 ? 
+                    data.predicted_times.map((t, i) => `<li>第${i+1}次: ${t.toFixed(2)}</li>`).join('') : 
+                    '<li>无预测数据</li>'}
+            </ul>
+        `;
+        
+        updateCharts(trainData, data.predicted_times || []);
+    }
+    
+    function fetchDatasetList() {
+        fetch('/api/data/list')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('dataset-select');
+                const group = document.createElement('optgroup');
+                group.label = "我的云端数据";
+                data.data.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = `db:${item.id}`;
+                    opt.textContent = `[云端] ${item.name} (${item.count}点)`;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            }
+        });
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+        document.getElementById('dataset-select').addEventListener('change', function() {
+            const customGroup = document.getElementById('custom-dataset-group');
+            if (this.value === 'custom') {
+                customGroup.style.display = 'block';
+            } else {
+                customGroup.style.display = 'none';
+                loadDataset(this.value);
+            }
+        });
+        document.getElementById('train-ratio-slider').addEventListener('input', function() {
+            document.getElementById('train-ratio-value').textContent = `${this.value}%`;
+        });
+        document.getElementById('load-dataset-btn').addEventListener('click', function() {
+            loadDataset('custom');
+        });
+        document.getElementById('train-btn').addEventListener('click', trainModel);
+        document.getElementById('predict-btn').addEventListener('click', performPrediction);
+        
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                const tabContents = {
+                    '模型简介': document.getElementById('model-intro-content'),
+                    '失效数据': document.getElementById('dataset-content'),
+                    '预测分析': document.getElementById('prediction-content')
+                };
+                Object.values(tabContents).forEach(content => {
+                    if (content) content.style.display = 'none';
+                });
+                const tabName = this.textContent.trim();
+                if (tabContents[tabName]) {
+                    tabContents[tabName].style.display = 'block';
+                }
+            });
+        });
+        document.querySelectorAll('.tab')[0].click();
+        loadDataset('default');
+        fetchDatasetList();
+    });
+</script>
+{% endblock %}
+
