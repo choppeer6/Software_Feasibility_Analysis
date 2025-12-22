@@ -11,7 +11,7 @@
             <div class="alert error" style="margin-bottom: 20px; padding: 10px; border-radius: 4px;">{{ error }}</div>
         {% endif %}
 
-        <form id="authForm" method="POST" action="{{ url_for('login') }}">
+        <form method="POST" action="{{ url_for('login') }}">
             <div class="form-group">
                 <label for="username">用户名</label>
                 <input type="text" id="username" name="username" placeholder="请输入用户名" required>
@@ -20,54 +20,8 @@
                 <label for="password">密码</label>
                 <input type="password" id="password" name="password" placeholder="请输入密码" required>
             </div>
-            <div id="registerSection" style="display: none;">
-                <div class="form-group">
-                    <label for="confirm_password">确认密码</label>
-                    <input type="password" id="confirm_password" name="confirm_password" placeholder="请再次输入密码">
-                </div>
-            </div>
-            <button type="submit" id="submitBtn" style="width: 100%; margin-top: 10px; height: 40px;">立即登录</button>
-            <div style="text-align: center; margin-top: 15px;">
-                <a href="javascript:void(0)" id="toggleAuth" style="font-size: 14px; color: var(--primary-color);">没有账号？立即注册</a>
-            </div>
+            <button type="submit" style="width: 100%; margin-top: 10px; height: 40px;">立即登录</button>
         </form>
-
-        <script>
-            const toggleAuth = document.getElementById('toggleAuth');
-            const registerSection = document.getElementById('registerSection');
-            const submitBtn = document.getElementById('submitBtn');
-            const authForm = document.getElementById('authForm');
-            const confirmPassword = document.getElementById('confirm_password');
-            const title = document.querySelector('h2');
-            let isRegister = false;
-
-            toggleAuth.addEventListener('click', () => {
-                isRegister = !isRegister;
-                if (isRegister) {
-                    title.innerText = '用户注册';
-                    registerSection.style.display = 'block';
-                    confirmPassword.required = true;
-                    submitBtn.innerText = '立即注册';
-                    toggleAuth.innerText = '已有账号？返回登录';
-                    authForm.action = "{{ url_for('register') }}";
-                } else {
-                    title.innerText = '欢迎登录';
-                    registerSection.style.display = 'none';
-                    confirmPassword.required = false;
-                    submitBtn.innerText = '立即登录';
-                    toggleAuth.innerText = '没有账号？立即注册';
-                    authForm.action = "{{ url_for('login') }}";
-                }
-            });
-
-            authForm.onsubmit = function(e) {
-                if (isRegister && confirmPassword.value !== document.getElementById('password').value) {
-                    alert('两次输入的密码不一致');
-                    return false;
-                }
-                return true;
-            };
-        </script>
     </div>
 </div>
 {% endblock %}

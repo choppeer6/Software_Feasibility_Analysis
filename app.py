@@ -65,6 +65,12 @@ from model.svr_model_prediction import (
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
+# 模拟用户数据库
+users = {
+    'admin': 'password123',
+    'user1': 'pass456'
+}
+
 # 示例失效数据
 SAMPLE_FAILURE_DATA = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
 
@@ -89,11 +95,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # --- 定义数据表模型 ---
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-
 class Dataset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(100), nullable=False)      # 存储在磁盘上的文件名 (避免重名)
@@ -102,71 +103,9 @@ class Dataset(db.Model):
     data_count = db.Column(db.Integer, default=0)             # 数据点数量
     user_id = db.Column(db.String(50), nullable=False)        # 关联的用户
 
-# 初始化数据库表并创建默认用户
-# 初始化数据库表并创建默认用户
-def sync_files_to_db():
-    # 获取所有已存在于数据库中的文件名
-    existing_db_filenames = {d.filename for d in Dataset.query.all()}
-    
-    # 扫描 uploads 文件夹
-    for filename in os.listdir(app.config["UPLOAD_FOLDER"]):
-        if filename.endswith((".csv", ".txt")) and filename not in existing_db_filenames:
-            file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read().replace("\n", ",")
-                    data_points = [x for x in content.split(",") if x.strip()]
-                    count = len(data_points)
-                
-                # 尝试从文件名中解析 user_id (假设格式为 user_id_timestamp_original_name.ext)
-                parts = filename.split("_")
-                inferred_user_id = "unknown" # 默认值
-                if len(parts) >= 3: # 至少有 user_id_timestamp_name
-                    inferred_user_id = parts[0]
-                
-                # 如果解析出的用户不存在，则使用 admin 或其他默认用户
-                if not User.query.filter_by(username=inferred_user_id).first():
-                    inferred_user_id = "admin" # fallback to admin
-
-                # 尝试从文件名中恢复 original_name
-                original_name = filename # 默认值
-                if len(parts) > 2: # user_id_timestamp_originalName.ext
-                    # 原始文件名可能是 timestamp_originalName.ext 或 originalName.ext
-                    # 尝试去除 user_id 和 timestamp 部分
-                    original_name_parts = filename.split("_", 2)
-                    if len(original_name_parts) == 3: # 假设 user_id_timestamp_original_name.ext
-                        original_name = original_name_parts[2]
-                    else: # 假设 timestamp_original_name.ext
-                        original_name_parts = filename.split("_", 1)
-                        if len(original_name_parts) == 2:
-                            original_name = original_name_parts[1]
-
-                new_dataset = Dataset(
-                    filename=filename,
-                    original_name=original_name,
-                    data_count=count,
-                    upload_time=datetime.fromtimestamp(os.path.getmtime(file_path)), # 使用文件修改时间
-                    user_id=inferred_user_id
-                )
-                db.session.add(new_dataset)
-                print(f"Synced new file to DB: {filename} for user {inferred_user_id}")
-            except Exception as e:
-                print(f"Error syncing file {filename}: {e}")
-    db.session.commit()
-
+# 初始化数据库表
 with app.app_context():
     db.create_all()
-    # 迁移现有的模拟用户到数据库 (如果不存在)
-    existing_users = {
-        'admin': 'password123',
-        'user1': 'pass456'
-    }
-    for uname, pword in existing_users.items():
-        if not User.query.filter_by(username=uname).first():
-            new_user = User(username=uname, password=pword)
-            db.session.add(new_user)
-    db.session.commit()
-    sync_files_to_db() # 在应用启动时同步文件
 
 # --- 添加数据管理路由 ---
 
@@ -295,29 +234,13 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
-@app.route('/register', methods=['POST'])
-def register():
-    username = request.form['username']
-    password = request.form['password']
-    
-    if User.query.filter_by(username=username).first():
-        return render_template('login.html', error='Username already exists')
-    
-    new_user = User(username=username, password=password)
-    db.session.add(new_user)
-    db.session.commit()
-    
-    session['username'] = username
-    return redirect(url_for('dashboard'))
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         
-        user = User.query.filter_by(username=username, password=password).first()
-        if user:
+        if username in users and users[username] == password:
             session['username'] = username
             return redirect(url_for('dashboard'))
         else:
