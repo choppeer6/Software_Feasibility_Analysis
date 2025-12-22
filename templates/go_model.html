@@ -146,20 +146,20 @@
     }
     function trainModel() {
         if (trainData.length === 0) { showMessage("请先加载数据", 'error'); return; }
-        const loadingSpinner = document.getElementById('loading-spinner'); loadingSpinner.style.display = 'flex';
+        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         fetch('/api/go/train', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify({ train_data: trainData }), })
-        .then(res => { loadingSpinner.style.display = 'none'; if(!res.ok) throw new Error(res.status); return res.json(); })
+        .then(res => { if (window.GlobalLoading) { GlobalLoading.hide(); } if(!res.ok) throw new Error(res.status); return res.json(); })
         .then(data => { if(data.success) { modelTrained = true; showMessage("训练成功", 'success'); if(data.a && data.b) document.getElementById('result-data').innerHTML = `<h4>结果</h4><p>a=${data.a}, b=${data.b}</p>`; } else throw new Error(data.error); })
-        .catch(err => { loadingSpinner.style.display = 'none'; showMessage(`失败: ${err.message}`, 'error'); });
+        .catch(err => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`失败: ${err.message}`, 'error'); });
     }
     function performPrediction() {
         if (!modelTrained) { showMessage("请先训练", 'error'); return; }
-        const loadingSpinner = document.getElementById('loading-spinner'); loadingSpinner.style.display = 'flex';
+        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         const formData = { data_type: document.getElementById('dataset-select').value, prediction_step: parseInt(document.getElementById('prediction-step').value), train_data: trainData, test_data: testData };
         fetch('/api/go/predict', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify(formData), })
-        .then(res => { loadingSpinner.style.display = 'none'; return res.json(); })
+        .then(res => { if (window.GlobalLoading) { GlobalLoading.hide(); } return res.json(); })
         .then(data => { if(data.success) { showMessage("预测成功", 'success'); updatePredictionResults(data); } else throw new Error(data.error); })
-        .catch(err => { loadingSpinner.style.display = 'none'; showMessage(`失败: ${err.message}`, 'error'); });
+        .catch(err => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`失败: ${err.message}`, 'error'); });
     }
     function updatePredictionResults(data) {
         document.getElementById('accuracy-metrics').style.display = 'grid';

@@ -175,7 +175,7 @@
             data: {
                 labels: [],
                 datasets: [{
-                    label: '历史失效时间',
+                    label: '历史失效时间间隔',
                     data: [],
                     borderColor: 'rgb(75, 192, 192)',
                     tension: 0.1
@@ -186,7 +186,7 @@
                 maintainAspectRatio: false,
                 scales: {
                     x: { title: { display: true, text: '失效序号' } },
-                    y: { title: { display: true, text: '失效时间' } }
+                    y: { title: { display: true, text: '失效时间间隔' } }
                 }
             }
         });
@@ -196,11 +196,11 @@
             type: 'scatter',
             data: {
                 datasets: [{
-                    label: '历史失效',
+                    label: '历史失效间隔',
                     data: [],
                     backgroundColor: 'rgba(75, 192, 192, 0.5)'
                 }, {
-                    label: '预测失效',
+                    label: '预测失效间隔',
                     data: [],
                     backgroundColor: 'rgba(255, 99, 132, 0.5)'
                 }]
@@ -210,22 +210,24 @@
                 maintainAspectRatio: false,
                 scales: {
                     x: { title: { display: true, text: '失效序号' } },
-                    y: { title: { display: true, text: '失效时间' } }
+                    y: { title: { display: true, text: '失效时间间隔' } }
                 }
             }
         });
     }
     
-    function updateCharts(historicalFailures, predictedFailures) {
+    function updateCharts(historicalFailures, predictedIntervals) {
         if (historicalFailures && historicalFailures.length > 0) {
             failureChart.data.labels = historicalFailures.map((_, i) => i + 1);
             failureChart.data.datasets[0].data = historicalFailures;
             failureChart.update();
             
-            const historicalData = historicalFailures.map((time, index) => ({ x: index + 1, y: time }));
-            const predictedData = predictedFailures ? predictedFailures.map((time, index) => ({
+            // 历史失效间隔时间
+            const historicalData = historicalFailures.map((interval, index) => ({ x: index + 1, y: interval }));
+            // 预测的失效间隔时间
+            const predictedData = predictedIntervals ? predictedIntervals.map((interval, index) => ({
                 x: index + 1 + historicalFailures.length,
-                y: time
+                y: interval
             })) : [];
             
             predictionChart.data.datasets[0].data = historicalData;
@@ -333,8 +335,7 @@
     
     function trainModel() {
         if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
-        const loadingSpinner = document.getElementById('loading-spinner');
-        loadingSpinner.style.display = 'flex';
+        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         try {
             const lookBack = parseInt(document.getElementById('look-back').value);
             const kernel = document.getElementById('kernel').value;
@@ -361,7 +362,7 @@
                 }),
             })
             .then(response => {
-                loadingSpinner.style.display = 'none';
+                if (window.GlobalLoading) { GlobalLoading.hide(); }
                 if (!response.ok) return response.text().then(text => { throw new Error(`HTTP错误: ${response.status} - ${text}`); });
                 return response.json();
             })
@@ -378,14 +379,13 @@
                         <p><strong>训练集MAE:</strong> ${responseData.train_mae ? responseData.train_mae.toFixed(4) : 'N/A'}</p>`;
                 } else { throw new Error(responseData.error || "模型训练失败"); }
             })
-            .catch(error => { loadingSpinner.style.display = 'none'; showMessage(`训练模型失败: ${error.message}`, 'error'); });
-        } catch (error) { loadingSpinner.style.display = 'none'; showMessage(`训练模型失败: ${error.message}`, 'error'); }
+            .catch(error => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`训练模型失败: ${error.message}`, 'error'); });
+        } catch (error) { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`训练模型失败: ${error.message}`, 'error'); }
     }
     
     function performPrediction() {
         if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
-        const loadingSpinner = document.getElementById('loading-spinner');
-        loadingSpinner.style.display = 'flex';
+        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         try {
             const predictionStep = parseInt(document.getElementById('prediction-step').value);
             const lookBack = parseInt(document.getElementById('look-back').value);
@@ -414,7 +414,7 @@
                 body: JSON.stringify(formData),
             })
             .then(response => {
-                loadingSpinner.style.display = 'none';
+                if (window.GlobalLoading) { GlobalLoading.hide(); }
                 if (!response.ok) return response.text().then(text => { throw new Error(`HTTP错误: ${response.status} - ${text}`); });
                 return response.json();
             })
@@ -425,8 +425,8 @@
                     updatePredictionResults(responseData);
                 } else { throw new Error(responseData.error || "预测失败"); }
             })
-            .catch(error => { loadingSpinner.style.display = 'none'; showMessage(`预测失败: ${error.message}`, 'error'); });
-        } catch (error) { loadingSpinner.style.display = 'none'; showMessage(error.message, 'error'); }
+            .catch(error => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`预测失败: ${error.message}`, 'error'); });
+        } catch (error) { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(error.message, 'error'); }
     }
     
     function updatePredictionResults(data) {
@@ -439,18 +439,22 @@
         document.getElementById('accuracy-value').textContent = data.accuracy !== undefined ? `${data.accuracy}%` : 'N/A';
         
         const resultDiv = document.getElementById('result-data');
+        // 计算下一次失效的间隔时间（第一个预测间隔）
+        const nextInterval = data.predicted_intervals && data.predicted_intervals.length > 0 ? data.predicted_intervals[0] : null;
+        
         resultDiv.innerHTML = `
             <h4>预测结果</h4>
-            <p><strong>下一次失效预测时间:</strong> ${data.next_failure_time !== undefined ? data.next_failure_time.toFixed(2) : 'N/A'}</p>
-            <h5>未来失效时间预测点:</h5>
+            <p><strong>下一次失效预测间隔:</strong> ${nextInterval !== null ? nextInterval.toFixed(2) : 'N/A'}</p>
+            <h5>未来失效时间间隔预测:</h5>
             <ul>
-                ${data.predicted_times && data.predicted_times.length > 0 ? 
-                    data.predicted_times.map((t, i) => `<li>第${i+1}次: ${t.toFixed(2)}</li>`).join('') : 
+                ${data.predicted_intervals && data.predicted_intervals.length > 0 ? 
+                    data.predicted_intervals.map((interval, i) => `<li>第${i+1}次: ${interval.toFixed(2)}</li>`).join('') : 
                     '<li>无预测数据</li>'}
             </ul>
         `;
         
-        updateCharts(trainData, data.predicted_times || []);
+        // 传递预测的间隔时间给图表函数
+        updateCharts(trainData, data.predicted_intervals || []);
     }
     
     function fetchDatasetList() {

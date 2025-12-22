@@ -170,5 +170,43 @@
             </div>
         </div>
     </div>
+    
+    <!-- 全局加载管理：延时显示，避免快速请求造成的闪烁 -->
+    <script>
+        window.GlobalLoading = (function () {
+            let timer = null;
+            const DELAY = 200; // ms，只有超过这个时间的请求才显示全屏加载
+
+            function getEl() {
+                return document.getElementById('loading-spinner');
+            }
+
+            return {
+                showDelayed(delay) {
+                    const d = typeof delay === 'number' ? delay : DELAY;
+                    if (timer) {
+                        clearTimeout(timer);
+                        timer = null;
+                    }
+                    timer = setTimeout(() => {
+                        const el = getEl();
+                        if (el) {
+                            el.style.display = 'flex';
+                        }
+                    }, d);
+                },
+                hide() {
+                    if (timer) {
+                        clearTimeout(timer);
+                        timer = null;
+                    }
+                    const el = getEl();
+                    if (el) {
+                        el.style.display = 'none';
+                    }
+                }
+            };
+        })();
+    </script>
 </body>
 </html>

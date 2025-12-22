@@ -1460,7 +1460,7 @@ def api_svr_train():
             data = json.loads(raw)
         
         train_data = data.get('train_data')
-        look_back = data.get('look_back', 5)
+        look_back = data.get('look_back', 8)  # 根据图6.11，m值常用为8
         kernel = data.get('kernel', 'rbf')
         C = data.get('C', 100.0)
         gamma = data.get('gamma', 'scale')
@@ -1477,7 +1477,7 @@ def api_svr_train():
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
         
-        model, scaler, train_metrics = svr_train_model(
+        model, train_metrics, t_min, t_max = svr_train_model(
             train_data,
             look_back=look_back,
             kernel=kernel,
@@ -1519,7 +1519,7 @@ def api_svr_predict():
         
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
-        look_back = data.get('look_back', 5)
+        look_back = data.get('look_back', 8)  # 根据图6.11，m值常用为8
         kernel = data.get('kernel', 'rbf')
         C = data.get('C', 100.0)
         gamma = data.get('gamma', 'scale')
@@ -1540,7 +1540,7 @@ def api_svr_predict():
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
         
-        model, scaler, _ = svr_train_model(
+        model, _, t_min, t_max = svr_train_model(
             train_data,
             look_back=look_back,
             kernel=kernel,
@@ -1550,9 +1550,9 @@ def api_svr_predict():
         )
         
         prediction_results = svr_predict_future_failures(
-            model, scaler, train_data, prediction_step, look_back
+            model, train_data, prediction_step, look_back, t_min, t_max
         )
-        accuracy_metrics = calculate_svr_accuracy(model, scaler, train_data, look_back)
+        accuracy_metrics = calculate_svr_accuracy(model, train_data, look_back, t_min, t_max)
         
         return jsonify({
             'success': True,

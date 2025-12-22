@@ -8,9 +8,9 @@
     <p style="color:#666;">您可以在此上传新的失效时间数据，或管理已有的数据文件。</p>
     
     <div style="margin-top: 20px; padding: 20px; border: 2px dashed #1890ff; border-radius: 8px; text-align: center; background: #f0f9ff;">
-        <input type="file" id="fileInput" accept=".txt,.csv" style="display: none;" onchange="handleFileSelect()">
+        <input type="file" id="fileInput" accept=".txt,.csv,.xls,.xlsx" style="display: none;" onchange="handleFileSelect()">
         <button onclick="document.getElementById('fileInput').click()" style="font-size: 16px; padding: 8px 20px;">+ 点击上传新数据</button>
-        <p id="fileNameDisplay" style="margin-top: 10px; color: #666;"></p>
+        <p id="fileNameDisplay" style="margin-top: 10px; color: #666;">支持 .txt、.csv、.xls、.xlsx 文件（自动提取单元格中的数值作为时间序列）</p>
         <button id="uploadBtn" onclick="uploadFile()" style="display: none; background-color: #52c41a; margin-top: 10px;">确认上传</button>
     </div>
 </div>

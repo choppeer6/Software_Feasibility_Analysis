@@ -313,8 +313,7 @@
     }
     function trainModel() {
         if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
-        const loadingSpinner = document.getElementById('loading-spinner');
-        loadingSpinner.style.display = 'flex';
+        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         try {
             fetch('/api/jm/train', {
                 method: 'POST',
@@ -322,7 +321,7 @@
                 body: JSON.stringify({ train_data: trainData, ex: parseFloat(document.getElementById('ex').value), ey: parseFloat(document.getElementById('ey').value) }),
             })
             .then(response => {
-                loadingSpinner.style.display = 'none';
+                if (window.GlobalLoading) { GlobalLoading.hide(); }
                 if (!response.ok) return response.text().then(text => { throw new Error(`HTTP错误: ${response.status} - ${text}`); });
                 return response.json();
             })
@@ -336,15 +335,14 @@
                     }
                 } else { throw new Error(responseData.error || "模型训练失败"); }
             })
-            .catch(error => { loadingSpinner.style.display = 'none'; showMessage(`训练模型失败: ${error.message}`, 'error'); });
-        } catch (error) { loadingSpinner.style.display = 'none'; showMessage(`训练模型失败: ${error.message}`, 'error'); }
+            .catch(error => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`训练模型失败: ${error.message}`, 'error'); });
+        } catch (error) { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`训练模型失败: ${error.message}`, 'error'); }
     }
     
     function performPrediction() {
         if (!modelTrained) { showMessage("请先训练模型", 'error'); return; }
         if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
-        const loadingSpinner = document.getElementById('loading-spinner');
-        loadingSpinner.style.display = 'flex';
+        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         try {
             const predictionStep = parseInt(document.getElementById('prediction-step').value);
             const ex = parseFloat(document.getElementById('ex').value);
@@ -357,7 +355,7 @@
                 body: JSON.stringify(formData),
             })
             .then(response => {
-                loadingSpinner.style.display = 'none';
+                if (window.GlobalLoading) { GlobalLoading.hide(); }
                 if (!response.ok) return response.text().then(text => { throw new Error(`HTTP错误: ${response.status} - ${text}`); });
                 return response.json();
             })
@@ -368,8 +366,8 @@
                     updatePredictionResults(responseData);
                 } else { throw new Error(responseData.error || "预测失败"); }
             })
-            .catch(error => { loadingSpinner.style.display = 'none'; showMessage(`预测失败: ${error.message}`, 'error'); });
-        } catch (error) { loadingSpinner.style.display = 'none'; showMessage(error.message, 'error'); }
+            .catch(error => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`预测失败: ${error.message}`, 'error'); });
+        } catch (error) { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(error.message, 'error'); }
     }
     
     function updatePredictionResults(data) {
