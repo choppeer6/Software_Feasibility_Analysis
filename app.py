@@ -68,6 +68,12 @@ from model.svr_model_prediction import (
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
+# 模拟用户数据库
+users = {
+    'admin': 'password123',
+    'user1': 'pass456'
+}
+
 # 示例失效数据
 SAMPLE_FAILURE_DATA = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151,
                        242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
@@ -93,12 +99,15 @@ db = SQLAlchemy(app)
 
 
 # --- 定义数据表模型 ---
+<<<<<<< HEAD
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
 
 
+=======
+>>>>>>> 4fca7c7f4d1ba5b5a11e53f58074a0d0bb6a8720
 class Dataset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(100), nullable=False)  # 存储在磁盘上的文件名 (避免重名)
@@ -108,6 +117,7 @@ class Dataset(db.Model):
     user_id = db.Column(db.String(50), nullable=False)  # 关联的用户
 
 
+<<<<<<< HEAD
 # 初始化数据库表并创建默认用户
 # 初始化数据库表并创建默认用户
 def sync_files_to_db():
@@ -175,6 +185,11 @@ with app.app_context():
     db.session.commit()
     sync_files_to_db()  # 在应用启动时同步文件
 
+=======
+# 初始化数据库表
+with app.app_context():
+    db.create_all()
+>>>>>>> 4fca7c7f4d1ba5b5a11e53f58074a0d0bb6a8720
 
 # --- 添加数据管理路由 ---
 
@@ -357,6 +372,7 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+<<<<<<< HEAD
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -374,14 +390,21 @@ def register():
     return redirect(url_for('dashboard'))
 
 
+=======
+>>>>>>> 4fca7c7f4d1ba5b5a11e53f58074a0d0bb6a8720
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+<<<<<<< HEAD
 
         user = User.query.filter_by(username=username, password=password).first()
         if user:
+=======
+        
+        if username in users and users[username] == password:
+>>>>>>> 4fca7c7f4d1ba5b5a11e53f58074a0d0bb6a8720
             session['username'] = username
             return redirect(url_for('dashboard'))
         else:
@@ -1943,5 +1966,10 @@ if __name__ == '__main__':
     # 确保static目录存在用于保存图表
     if not os.path.exists('static'):
         os.makedirs('static')
+<<<<<<< HEAD
 
     app.run(debug=True, host='0.0.0.0', port=5000)
+=======
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
+>>>>>>> 4fca7c7f4d1ba5b5a11e53f58074a0d0bb6a8720
