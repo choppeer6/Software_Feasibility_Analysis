@@ -321,7 +321,7 @@ def get_dataset_content(id):
 
         if ext in ['.xls', '.xlsx']:
             # Excel 数据解析：读取所有单元格并展平
-            df = pd.read_excel(file_path, header=None)
+            df = pd.read_excel(file_path, header=None, engine='openpyxl')
             flat = df.values.flatten()
             series = pd.to_numeric(flat, errors='coerce')
             data_values = [float(v) for v in series if pd.notna(v)]
