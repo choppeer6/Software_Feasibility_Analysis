@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}模型参数与特征对比{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 10px;">模型参数与特征对比</h2>
+    <p style="color:#666;">对各模型的参数设置、假设特征及适用场景进行对照，帮助选择合适的预测方法。</p>
+</div>
+
+<div class="card" style="margin-top:16px;">
+    <h3>查看范围</h3>
+    <p style="color:#666; margin-bottom:10px;">选择需要查看的模型，参数与训练结果表都会根据勾选项展示。</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;">
+        <label><input type="checkbox" class="model-check" value="jm" checked> JM</label>
+        <label><input type="checkbox" class="model-check" value="go" checked> GO</label>
+        <label><input type="checkbox" class="model-check" value="nhpp" checked> NHPP</label>
+        <label><input type="checkbox" class="model-check" value="bp" checked> BP 神经网络</label>
+        <label><input type="checkbox" class="model-check" value="arima" checked> ARIMA</label>
+        <label><input type="checkbox" class="model-check" value="gm11" checked> GM(1,1)</label>
+        <label><input type="checkbox" class="model-check" value="svr" checked> SVR</label>
+    </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+    <h3>训练结果对比（可选）</h3>
+    <p style="color:#666; margin-bottom:10px;">输入失效时间数据并点击对比，展示所选模型的误差指标。</p>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:end;">
+        <div>
+            <label for="dataset-select">选择失效数据集</label>
+            <select id="dataset-select" style="width:100%; margin-bottom:8px;">
+                <option value="default">默认数据集</option>
+                <option value="custom">自定义数据集</option>
+                <option value="testset1">数据集1（测试数据集）</option>
+                <option value="project">项目数据集</option>
+                <option value="go">GO数据集</option>
+                <optgroup label="我的云端数据">
+                    <option value="cloud_arima2">arima_test_2.txt (48点)</option>
+                    <option value="cloud_go1">go_test_1.txt (35点)</option>
+                    <option value="cloud_gm11">gm11_test_1.txt (40点)</option>
+                    <option value="cloud_jm1">jm_test_1.txt (61点)</option>
+                    <option value="cloud_svr1">svr_test_1.txt (34点)</option>
+                    <option value="cloud_bpnn1">bpnn_test_1.txt (50点)</option>
+                    <option value="cloud_arima1">arima_test_1.xlsx (34点)</option>
+                    <option value="cloud_ntds">NTDS数据集.csv (34点)</option>
+                    <option value="cloud_01">01.csv (4点)</option>
+                </optgroup>
+            </select>
+            <label for="train-data-input">若选择自定义，请输入失效时间数据（逗号分隔）</label>
+            <textarea id="train-data-input" rows="4" style="width:100%;resize:vertical;" placeholder="例如：9,21,32,36,43,45,50,58,63,70" disabled></textarea>
+        </div>
+        <div>
+            <label for="data-type-select">数据类型</label>
+            <select id="data-type-select" style="width:100%; margin-bottom:8px;">
+                <option value="interval" selected>失效时间间隔序列</option>
+                <option value="cumulative">累计失效时间点序列</option>
+            </select>
+            <small style="color:#999; display:block; margin-bottom:8px;">若选择累计时间，将自动转换为间隔序列再训练</small>
+            <button id="compare-btn" style="width:100%;">开始训练对比</button>
+            <div id="message-area" style="margin-top:8px;"></div>
+        </div>
+    </div>
+    <div id="metrics-wrapper" style="overflow-x:auto; margin-top:12px; display:none;">
+        <table style="width:100%; border-collapse:collapse; min-width:900px;">
+            <thead>
+                <tr style="background:#fafafa;">
+                    <th style="border:1px solid #eee; padding:8px;">模型</th>
+                    <th style="border:1px solid #eee; padding:8px;">数据要求</th>
+                    <th style="border:1px solid #eee; padding:8px;">模型特征</th>
+                    <th style="border:1px solid #eee; padding:8px;">MAE</th>
+                    <th style="border:1px solid #eee; padding:8px;">MSE</th>
+                    <th style="border:1px solid #eee; padding:8px;">RMSE</th>
+                    <th style="border:1px solid #eee; padding:8px;">R²</th>
+                    <th style="border:1px solid #eee; padding:8px;">准确率</th>
+                    <th style="border:1px solid #eee; padding:8px;">备注</th>
+                </tr>
+            </thead>
+            <tbody id="metrics-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+    <h3>参数与特征对照</h3>
+    <p style="color:#666; margin-bottom:10px;">表格中列出了关键参数、模型假设、适合的数据特征以及使用提示，便于快速决策。</p>
+    <div id="table-wrapper" style="overflow-x:auto; margin-top:10px;">
+        <table style="width:100%; border-collapse:collapse; min-width:880px;">
+            <thead>
+                <tr style="background:#fafafa;">
+                    <th style="border:1px solid #eee; padding:8px;">模型</th>
+                    <th style="border:1px solid #eee; padding:8px;">关键参数</th>
+                    <th style="border:1px solid #eee; padding:8px;">模型特征 / 假设</th>
+                    <th style="border:1px solid #eee; padding:8px;">适合的数据特点</th>
+                    <th style="border:1px solid #eee; padding:8px;">优点</th>
+                    <th style="border:1px solid #eee; padding:8px;">注意事项 / 不适用</th>
+                </tr>
+            </thead>
+            <tbody id="result-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const MODEL_META = {
+        jm: {
+            name: 'JM 模型',
+            params: ['初始故障率 λ₀', '递减系数 φ'],
+            features: ['失效强度随修复递减', 'NHPP 指数均值函数'],
+            suitable: ['失效时间/间隔呈下降趋势', '软件可靠性增长测试阶段'],
+            pros: ['参数少、拟合稳定', '可解释性好'],
+            cautions: ['不适合故障率上升或波动明显的数据']
+        },
+        go: {
+            name: 'GO 模型',
+            params: ['总故障数 N', '故障检出率 φ'],
+            features: ['基于 NHPP 的指数型增长', '假设修复后不再复发'],
+            suitable: ['中早期可靠性增长过程', '缺陷逐步减少、趋势平滑'],
+            pros: ['计算简洁，收敛快'],
+            cautions: ['对后期波动和复发型缺陷不敏感']
+        },
+        nhpp: {
+            name: 'NHPP (通用)',
+            params: ['均值函数参数若干', '可选幂律/Logistic/Weibull'],
+            features: ['非齐次泊松过程框架', '可表达加速或减速增长'],
+            suitable: ['失效率随时间变化的过程', '需要灵活均值函数的场景'],
+            pros: ['模型族丰富，可按趋势定制'],
+            cautions: ['参数估计可能敏感，需足量样本']
+        },
+        bp: {
+            name: 'BP 神经网络',
+            params: ['隐藏层规模', '学习率、正则项', '滑动窗口长度 (时序)'],
+            features: ['非线性拟合，能捕获复杂关系', '可结合特征工程'],
+            suitable: ['数据量中等以上', '潜在非线性或交互特征'],
+            pros: ['表达力强，可多特征联合'],
+            cautions: ['易过拟合，需正则与验证集', '对小样本不友好']
+        },
+        arima: {
+            name: 'ARIMA',
+            params: ['p, d, q', '季节项 P, D, Q, m (可选)'],
+            features: ['线性时序建模，平稳性假设', '可刻画趋势与季节性'],
+            suitable: ['平稳或可差分平稳的序列', '存在明显趋势/季节性的失效间隔'],
+            pros: ['统计可解释性强', '对中短期预测稳定'],
+            cautions: ['非线性、突变场景拟合弱', '参数选择需检验 (ACF/PACF)']
+        },
+        gm11: {
+            name: 'GM(1,1)',
+            params: ['发展系数 a', '灰输入 b'],
+            features: ['累加生成减噪，小样本友好', '单变量指数型趋势假设'],
+            suitable: ['样本极少 (4~10 点)', '单调趋势明显的间隔序列'],
+            pros: ['对缺失/噪声较鲁棒', '实现简单、计算快'],
+            cautions: ['对波动/周期性不敏感', '多维信息无法直接利用']
+        },
+        svr: {
+            name: 'SVR (核+PSO)',
+            params: ['核函数及参数 (RBF 等)', 'C、ε', 'PSO 粒子规模与迭代'],
+            features: ['间隔最大化 + 核映射', '可搜索全局最优超参'],
+            suitable: ['中小规模数据', '非线性关系但噪声可控'],
+            pros: ['泛化能力好，支持非线性', '对异常点相对稳健'],
+            cautions: ['核与超参选择敏感', '大样本训练耗时']
+        }
+    };
+
+    const tbody = document.getElementById('result-tbody');
+    const metricsTbody = document.getElementById('metrics-tbody');
+    const metricsWrapper = document.getElementById('metrics-wrapper');
+    const datasetSelect = document.getElementById('dataset-select');
+    const trainTextarea = document.getElementById('train-data-input');
+
+    function toList(items) {
+        if (!items || !items.length) return '-';
+        const li = items.map(x => `<li>${x}</li>`).join('');
+        return `<ul style="padding-left:18px;margin:0;">${li}</ul>`;
+    }
+
+    function renderTable(selected) {
+        tbody.innerHTML = '';
+        selected.forEach(key => {
+            const m = MODEL_META[key];
+            if (!m) return;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="border:1px solid #eee; padding:8px; font-weight:600;">${m.name}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(m.params)}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(m.features)}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(m.suitable)}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(m.pros)}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(m.cautions)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function refresh() {
+        const selected = Array.from(document.querySelectorAll('.model-check'))
+            .filter(c => c.checked)
+            .map(c => c.value);
+        if (selected.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="padding:12px; color:#999; text-align:center;">请至少选择一个模型</td></tr>';
+            return;
+        }
+        renderTable(selected);
+    }
+
+    function getSelectedModels() {
+        return Array.from(document.querySelectorAll('.model-check'))
+            .filter(c => c.checked)
+            .map(c => c.value);
+    }
+
+    function showMessage(msg, type = 'info') {
+        const area = document.getElementById('message-area');
+        area.innerHTML = '';
+        const div = document.createElement('div');
+        div.textContent = msg;
+        div.style.padding = '6px 8px';
+        div.style.borderRadius = '4px';
+        div.style.fontSize = '12px';
+        const colors = {
+            info: { bg: '#e6f4ff', color: '#0958d9', border: '#91caff' },
+            success: { bg: '#f6ffed', color: '#389e0d', border: '#b7eb8f' },
+            error: { bg: '#fff2f0', color: '#cf1322', border: '#ffa39e' }
+        };
+        const c = colors[type] || colors.info;
+        div.style.background = c.bg;
+        div.style.color = c.color;
+        div.style.border = `1px solid ${c.border}`;
+        area.appendChild(div);
+        if (type !== 'error') setTimeout(() => { div.remove(); }, 3000);
+    }
+
+    function parseInputData(requireValue = false) {
+        const raw = document.getElementById('train-data-input').value.trim();
+        if (!raw) {
+            if (requireValue) throw new Error('请选择数据集或输入自定义数据');
+            return null;
+        }
+        const parts = raw.split(',').map(x => x.trim()).filter(Boolean);
+        const nums = parts.map(x => Number(x));
+        if (nums.some(x => !Number.isFinite(x) || x <= 0)) {
+            throw new Error('请输入有效的正数序列');
+        }
+        return nums;
+    }
+
+    function getTrainData() {
+        const key = datasetSelect.value;
+        if (key === 'custom') {
+            return parseInputData(true);
+        }
+        // 非自定义时不在前端生成伪数据，交给后端按数据集名称读取，确保与单模型预测一致
+        return null;
+    }
+
+    function renderMetrics(results) {
+        metricsTbody.innerHTML = '';
+        Object.keys(results).forEach(key => {
+            const item = results[key];
+            const meta = MODEL_META[key] || { name: item.name || key, features: [], suitable: [] };
+            const tr = document.createElement('tr');
+            const metric = (k) => (item && item[k] !== undefined ? item[k] : '-');
+            const acc = item && item.accuracy !== undefined ? `${item.accuracy}%` : '-';
+            tr.innerHTML = `
+                <td style="border:1px solid #eee; padding:8px;">${item.name || meta.name || key}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(meta.suitable)}</td>
+                <td style="border:1px solid #eee; padding:8px;">${toList(meta.features)}</td>
+                <td style="border:1px solid #eee; padding:8px;">${metric('mae')}</td>
+                <td style="border:1px solid #eee; padding:8px;">${metric('mse')}</td>
+                <td style="border:1px solid #eee; padding:8px;">${metric('rmse')}</td>
+                <td style="border:1px solid #eee; padding:8px;">${metric('r2_score')}</td>
+                <td style="border:1px solid #eee; padding:8px;">${acc}</td>
+                <td style="border:1px solid #eee; padding:8px; color:${item.error?'#d4380d':'#999'};">${item.error || ''}</td>
+            `;
+            metricsTbody.appendChild(tr);
+        });
+        metricsWrapper.style.display = 'block';
+    }
+
+    document.getElementById('compare-btn').addEventListener('click', () => {
+        let trainData = null;
+        const datasetName = datasetSelect.value === 'custom' ? null : datasetSelect.value;
+        try {
+            trainData = getTrainData();
+        } catch (e) {
+            showMessage(e.message, 'error');
+            return;
+        }
+
+        const models = getSelectedModels();
+        if (models.length === 0) {
+            showMessage('请至少选择一个模型', 'error');
+            return;
+        }
+
+        showMessage('正在对比，请稍候...', 'info');
+
+        fetch('/api/model/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                train_data: trainData,
+                dataset_name: datasetName,
+                data_type: document.getElementById('data-type-select').value,
+                models: models
+            })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || '对比失败');
+                renderMetrics(data.results || {});
+                showMessage(`对比完成，使用数据点 ${data.used_train_count} 个`, 'success');
+            })
+            .catch(err => showMessage(err.message, 'error'));
+    });
+
+    datasetSelect.addEventListener('change', () => {
+        const isCustom = datasetSelect.value === 'custom';
+        trainTextarea.disabled = !isCustom;
+        if (!isCustom) {
+            trainTextarea.value = '';
+            trainTextarea.placeholder = '已选固定数据集，前端不生成样例，后端按名称读取';
+        } else {
+            trainTextarea.placeholder = '例如：9,21,32,36,43,45,50,58,63,70';
+        }
+    });
+
+    document.querySelectorAll('.model-check').forEach(cb => cb.addEventListener('change', refresh));
+    refresh();
+</script>
+{% endblock %}
+

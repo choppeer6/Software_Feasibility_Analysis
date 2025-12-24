@@ -76,6 +76,18 @@ function init(){
 }
 function upCharts(r,h,p){ if(r.length){rChart.data.labels=r.map(x=>x.time);rChart.data.datasets[0].data=r.map(x=>x.reliability);rChart.update();} if(h.length){fChart.data.datasets[0].data=h.map((v,i)=>({x:i+1,y:v})); fChart.data.datasets[1].data=p?p.map((v,i)=>({x:i+1+h.length,y:v})):[]; fChart.update();} }
 function msg(m,t='info'){document.getElementById('message-area').innerHTML=`<div class="${t}">${m}</div>`;}
+
+// 数字格式化，控制显示位数
+function formatNum(value,digits=6){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return 'N/A';
+    return Number(n.toFixed(digits)).toString();
+}
+function formatPct(value,digits=3){
+    const n=Number(value);
+    if(!Number.isFinite(n)) return 'N/A';
+    return `${formatNum(n,digits)}%`;
+}
 // 1. 【新增】重新划分函数
     function reloadCurrentDatasetSplit() {
         const val = document.getElementById('dataset-select').value;
@@ -124,7 +136,7 @@ function msg(m,t='info'){document.getElementById('message-area').innerHTML=`<div
         document.getElementById('train-ratio-value').innerText = this.value + '%';
     });
 function train(){ fetch('/api/nhpp/train',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({train_data:trainData,model_type:document.getElementById('model-type-select').value})}).then(r=>r.json()).then(d=>{if(d.success)msg("训练成功",'success');else msg(d.error,'error');}); }
-function pred(){ fetch('/api/nhpp/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_type:'custom',prediction_step:document.getElementById('prediction-step').value,model_type:document.getElementById('model-type-select').value,train_data:trainData,test_data:testData})}).then(r=>r.json()).then(d=>{if(d.success){msg("预测成功",'success');document.getElementById('accuracy-metrics').style.display='grid';document.getElementById('mae-value').innerText=d.mae.toFixed(4);document.getElementById('accuracy-value').innerText=d.accuracy.toFixed(2)+'%'; upCharts(d.reliability_curve,trainData,d.cumulative_times);}else msg(d.error,'error');}); }
+function pred(){ fetch('/api/nhpp/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_type:'custom',prediction_step:document.getElementById('prediction-step').value,model_type:document.getElementById('model-type-select').value,train_data:trainData,test_data:testData})}).then(r=>r.json()).then(d=>{if(d.success){msg("预测成功",'success');document.getElementById('accuracy-metrics').style.display='grid';document.getElementById('mae-value').innerText=formatNum(d.mae,6);document.getElementById('mse-value').innerText=formatNum(d.mse,6);document.getElementById('accuracy-value').innerText=formatPct(d.accuracy,3); upCharts(d.reliability_curve,trainData,d.cumulative_times);}else msg(d.error,'error');}); }
 document.addEventListener('DOMContentLoaded',()=>{ init(); document.getElementById('dataset-select').addEventListener('change',function(){if(this.value==='custom')document.getElementById('custom-dataset-group').style.display='block';else{document.getElementById('custom-dataset-group').style.display='none';loadDS(this.value);}}); document.getElementById('load-dataset-btn').addEventListener('click',()=>loadDS('custom')); document.getElementById('train-btn').addEventListener('click',train); document.getElementById('predict-btn').addEventListener('click',pred); document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); this.classList.add('active'); const m={'模型简介':'model-intro-content','失效数据':'dataset-content','预测分析':'prediction-content'}; Object.values(m).forEach(i=>document.getElementById(i).style.display='none'); document.getElementById(m[this.innerText]).style.display='block'; })); loadDS('default'); });
 </script>
 {% endblock %}

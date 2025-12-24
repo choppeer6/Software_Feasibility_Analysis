@@ -246,6 +246,19 @@
         if (type !== 'error') setTimeout(() => { messageDiv.remove(); }, 3000);
     }
     
+    // 数字格式化，控制显示位数
+    function formatNum(value, digits = 6) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return Number(n.toFixed(digits)).toString();
+    }
+
+    function formatPct(value, digits = 3) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return `${formatNum(n, digits)}%`;
+    }
+    
     function parseCustomDataset() {
         const input = document.getElementById('train-data-input').value.trim();
         if (!input) { showMessage("请输入失效时间数据", 'error'); return null; }
@@ -432,11 +445,11 @@
     function updatePredictionResults(data) {
         const accuracyMetrics = document.getElementById('accuracy-metrics');
         accuracyMetrics.style.display = 'grid';
-        document.getElementById('mae-value').textContent = data.mae !== undefined ? `${data.mae}` : 'N/A';
-        document.getElementById('mse-value').textContent = data.mse !== undefined ? `${data.mse}` : 'N/A';
-        document.getElementById('rmse-value').textContent = data.rmse !== undefined ? `${data.rmse}` : 'N/A';
-        document.getElementById('r2-value').textContent = data.r2_score !== undefined ? `${data.r2_score}` : 'N/A';
-        document.getElementById('accuracy-value').textContent = data.accuracy !== undefined ? `${data.accuracy}%` : 'N/A';
+        document.getElementById('mae-value').textContent = formatNum(data.mae, 6);
+        document.getElementById('mse-value').textContent = formatNum(data.mse, 6);
+        document.getElementById('rmse-value').textContent = formatNum(data.rmse, 6);
+        document.getElementById('r2-value').textContent = formatNum(data.r2_score, 6);
+        document.getElementById('accuracy-value').textContent = formatPct(data.accuracy, 3);
         
         const resultDiv = document.getElementById('result-data');
         // 计算下一次失效的间隔时间（第一个预测间隔）

@@ -306,16 +306,39 @@ class PSOOptimizer:
         return best_C, best_sigma, best_fitness
 
 
+def _detect_linear_trend(data: np.ndarray, threshold: float = 0.7) -> bool:
+    """
+    检测数据是否具有明显的线性趋势
+    
+    参数:
+        data: 时间序列数据
+        threshold: 线性相关系数阈值（默认0.7）
+        
+    返回:
+        is_linear: 如果数据具有明显的线性趋势，返回True
+    """
+    if len(data) < 3:
+        return False
+    
+    # 计算线性相关系数
+    x = np.arange(len(data))
+    correlation = np.corrcoef(x, data)[0, 1]
+    
+    # 如果相关系数大于阈值，认为具有明显的线性趋势
+    return abs(correlation) > threshold
+
+
 def svr_train_model(
     failure_data: Union[List[float], np.ndarray],
     look_back: int = 8,
-    kernel: str = "rbf",
+    kernel: Optional[str] = None,
     C: Optional[float] = None,
     gamma: Optional[Union[str, float]] = None,
     epsilon: float = 0.1,
     use_pso: bool = True,
     pso_n_particles: int = 30,
     pso_max_iterations: int = 50,
+    auto_kernel: bool = True,
 ) -> Tuple[SVR, Dict[str, float], float, float]:
     """
     训练 SVR 模型，用于失效时间序列预测。
@@ -328,13 +351,14 @@ def svr_train_model(
     参数:
         failure_data: 原始失效时间序列数据
         look_back: 回看窗口大小（m值，默认8）
-        kernel: 核函数类型（默认'rbf'）
+        kernel: 核函数类型（如果为None且auto_kernel=True，则自动选择）
         C: 惩罚因子（如果为None且use_pso=True，则使用PSO优化）
-        gamma: 核函数参数（如果为None且use_pso=True，则使用PSO优化）
+        gamma: 核函数参数（如果为None且use_pso=True，则使用PSO优化；线性核不需要）
         epsilon: SVR的epsilon参数
         use_pso: 是否使用PSO优化参数
         pso_n_particles: PSO粒子数量
         pso_max_iterations: PSO最大迭代次数
+        auto_kernel: 是否自动检测线性趋势并选择核函数（默认True）
     
     返回:
         model: 训练好的SVR模型（在归一化数据上训练）
@@ -346,6 +370,18 @@ def svr_train_model(
     if series.size < look_back + 1:
         raise ValueError(f"SVR 建议至少提供 {look_back + 1} 个数据点")
     
+    # 步骤0: 自动检测线性趋势并选择核函数
+    if auto_kernel and kernel is None:
+        is_linear = _detect_linear_trend(series)
+        if is_linear:
+            kernel = 'linear'
+        else:
+            kernel = 'rbf'
+    
+    # 如果未指定kernel，默认使用rbf
+    if kernel is None:
+        kernel = 'rbf'
+    
     # 步骤1: 数据归一化（公式6.54）
     normalized_data, t_min, t_max = normalize_data(series)
     
@@ -353,7 +389,7 @@ def svr_train_model(
     X, y = create_dataset(normalized_data, look_back)
     
     # 步骤3: 参数优化（使用PSO或手动指定）
-    if use_pso and (C is None or gamma is None):
+    if use_pso and (C is None or (gamma is None and kernel == 'rbf')):
         # 使用PSO优化参数
         pso = PSOOptimizer(
             n_particles=pso_n_particles,
@@ -364,20 +400,28 @@ def svr_train_model(
             look_back=look_back,
             epsilon=epsilon
         )
-        # 将sigma转换为gamma
-        best_gamma = 1.0 / (2.0 * best_sigma ** 2)
+        # 将sigma转换为gamma（仅对RBF核）
+        if kernel == 'rbf':
+            best_gamma = 1.0 / (2.0 * best_sigma ** 2)
+            gamma = best_gamma
         C = best_C
-        gamma = best_gamma
     else:
         # 使用手动指定的参数
         if C is None:
             C = 100.0
-        if gamma is None or gamma == 'scale':
-            # 如果没有指定gamma，使用默认值
-            gamma = 'scale'
+        if kernel == 'rbf':
+            if gamma is None or gamma == 'scale':
+                # 如果没有指定gamma，使用默认值
+                gamma = 'scale'
+        else:
+            # 线性核不需要gamma参数
+            gamma = None
     
     # 步骤4: 训练SVR模型（在归一化数据上）
-    model = SVR(kernel=kernel, C=C, gamma=gamma, epsilon=epsilon)
+    if kernel == 'linear':
+        model = SVR(kernel='linear', C=C, epsilon=epsilon)
+    else:
+        model = SVR(kernel=kernel, C=C, gamma=gamma, epsilon=epsilon)
     model.fit(X, y)
     
     # 步骤5: 计算训练集误差（在归一化数据上）
@@ -411,6 +455,44 @@ def svr_train_model(
     return model, train_metrics, t_min, t_max
 
 
+def _linear_trend_predict(
+    series: np.ndarray,
+    prediction_step: int = 5
+) -> List[float]:
+    """
+    对于线性数据，使用线性回归进行趋势外推预测
+    
+    参数:
+        series: 原始失效时间间隔序列
+        prediction_step: 预测步数
+        
+    返回:
+        predicted_intervals: 预测的失效间隔时间列表
+    """
+    if len(series) < 2:
+        # 如果数据太少，使用平均值
+        avg = float(np.mean(series))
+        return [avg] * prediction_step
+    
+    # 使用线性回归拟合趋势
+    x = np.arange(len(series))
+    # 使用最小二乘法拟合 y = ax + b
+    A = np.vstack([x, np.ones(len(x))]).T
+    slope, intercept = np.linalg.lstsq(A, series, rcond=None)[0]
+    
+    # 基于趋势外推未来值
+    predicted_intervals = []
+    for step in range(1, prediction_step + 1):
+        next_idx = len(series) + step - 1
+        predicted_value = slope * next_idx + intercept
+        # 确保预测值为正数
+        if predicted_value <= 0:
+            predicted_value = float(np.mean(series))
+        predicted_intervals.append(float(predicted_value))
+    
+    return predicted_intervals
+
+
 def svr_predict_future_failures(
     model: SVR,
     failure_data: Union[List[float], np.ndarray],
@@ -418,6 +500,7 @@ def svr_predict_future_failures(
     look_back: int = 8,
     t_min: Optional[float] = None,
     t_max: Optional[float] = None,
+    use_linear_trend: Optional[bool] = None,
 ) -> Dict[str, List[float]]:
     """
     使用训练好的 SVR 模型预测未来失效时间间隔。
@@ -436,6 +519,7 @@ def svr_predict_future_failures(
         look_back: 回看窗口大小（m值）
         t_min: 原始数据的最小值（用于归一化，如果为None则从failure_data计算）
         t_max: 原始数据的最大值（用于归一化，如果为None则从failure_data计算）
+        use_linear_trend: 是否对线性数据使用趋势外推（如果为None，则自动检测）
     
     返回:
         predicted_times: 预测的累计失效时间点
@@ -452,6 +536,27 @@ def svr_predict_future_failures(
         t_min = float(np.min(series))
     if t_max is None:
         t_max = float(np.max(series))
+    
+    # 检测是否为线性数据，如果是，使用趋势外推
+    if use_linear_trend is None:
+        use_linear_trend = _detect_linear_trend(series, threshold=0.7)
+    
+    # 对于线性数据，使用趋势外推而不是滑动窗口
+    if use_linear_trend:
+        predicted_intervals = _linear_trend_predict(series, prediction_step)
+        current_cumulative_time = float(np.sum(series))
+        cumulative_times = []
+        current_cumulative = current_cumulative_time
+        for interval in predicted_intervals:
+            current_cumulative += interval
+            cumulative_times.append(float(current_cumulative))
+        
+        return {
+            "predicted_times": cumulative_times.copy(),
+            "predicted_intervals": predicted_intervals,
+            "cumulative_times": cumulative_times,
+            "next_failure_time": cumulative_times[0] if cumulative_times else None,
+        }
     
     # 步骤1: 数据归一化
     normalized_data, _, _ = normalize_data(series, t_min=t_min, t_max=t_max)

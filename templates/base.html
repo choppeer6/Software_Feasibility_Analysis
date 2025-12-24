@@ -121,6 +121,9 @@
                 <li class="menu-item {% if request.endpoint == 'models' %}active{% endif %}">
                     <a href="{{ url_for('models') }}">📚 模型库</a>
                 </li>
+                <li class="menu-item {% if request.endpoint == 'model_compare' %}active{% endif %}">
+                    <a href="{{ url_for('model_compare') }}">📊 模型对比分析</a>
+                </li>
                 <div class="submenu-title">经典可靠性增长模型</div>
                 <ul class="submenu">
                     <li class="submenu-item {% if request.endpoint == 'jm_model' %}active{% endif %}">

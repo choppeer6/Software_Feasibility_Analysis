@@ -5,9 +5,13 @@ from statsmodels.tsa.arima.model import ARIMA
 
 
 def _to_series(failure_data: Union[List[float], np.ndarray]) -> np.ndarray:
-    """将失效时间列表转为 numpy 序列，并做简单排序去重。"""
+    """
+    将失效时间列表转为 numpy 序列。
+
+    注意：ARIMA 对“时间顺序”非常敏感，不能随意排序，否则会破坏时序结构，
+    所以这里**不再做排序或去重**，仅做类型转换。
+    """
     arr = np.asarray(failure_data, dtype=float)
-    arr = np.sort(arr)
     return arr
 
 
@@ -16,14 +20,16 @@ def arima_train_model(
     order: Tuple[int, int, int] = (1, 1, 1),
 ) -> Tuple[ARIMA, Dict[str, float]]:
     """
-    训练 ARIMA 模型（对失效时间序列进行建模）。
+    训练 ARIMA 模型（对失效时间 / 失效间隔序列进行建模）。
 
-    返回:
-        model: 拟合好的 ARIMAResults 对象
-        metrics: 训练期的一些指标（如 AIC）
+    逻辑说明（重新简化，避免过度“自动化”导致难以解释的结果）：
+    - 不再做“最近窗口截断”“自动选阶”等复杂策略；
+    - 直接在完整时序上拟合 ARIMA(p,d,q)，阶数由调用方传入（默认 (1,1,1)）；
+    - 训练与后续精度评估都基于同一条完整序列，保证指标含义清晰。
     """
     series = _to_series(failure_data)
-    if series.size < 5:
+    n = series.size
+    if n < 5:
         raise ValueError("ARIMA 建议至少提供 5 个数据点")
 
     model = ARIMA(series, order=order)
@@ -84,17 +90,22 @@ def calculate_arima_accuracy(
 ) -> Dict[str, float]:
     """
     简单计算 ARIMA 对历史序列的一步预测误差。
+
+    这里直接使用完整的时间序列作为评估基准，与 `arima_train_model` 的训练数据保持一致。
     """
-    series = _to_series(failure_data)
-    n = series.size
+    train_series = _to_series(failure_data)
+    n = train_series.size
     if n < 6:
-        return {"mae": 0.0, "mse": 0.0, "rmse": 0.0, "r2_score": 0.0, "accuracy": 0.0}
+        return {
+            "mae": 0.0,
+            "mse": 0.0,
+            "rmse": 0.0,
+            "r2_score": 0.0,
+            "accuracy": 0.0,
+        }
 
-    # 采用“向前滚动一步预测”的方式估计误差
-    train = series[:-1]
-    true_next = series[1:]
-
-    # 简化：用同一个模型对整个序列进行一步预测
+    # 一步预测：用同一个模型对训练区间做 in-sample 预测
+    true_next = train_series[1:]
     preds = model.predict(start=1, end=n - 1)
     preds = np.asarray(preds, dtype=float)
 

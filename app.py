@@ -3,14 +3,15 @@ import os
 import sys
 import numpy as np
 from datetime import datetime
+import pandas as pd
 
 # 添加项目路径到Python路径
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '软件可行性分析'))
 
 # 导入JM模型函数
 from model.jm_model_prediction import (
-    jm_model_parameter_estimation, 
-    jm_predict_future_failures, 
+    jm_model_parameter_estimation,
+    jm_predict_future_failures,
     plot_prediction_results,
     calculate_reliability,
     calculate_model_accuracy
@@ -20,7 +21,8 @@ from model.jm_model_prediction import (
 from model.go_model_prediction import (
     go_model_parameter_estimation,
     go_predict_future_failures,
-    plot_prediction_results as go_plot_prediction_results,
+    # go_calculate_model_accuracy
+    # plot_prediction_results as go_plot_prediction_results,
     calculate_reliability as go_calculate_reliability,
     calculate_model_accuracy as go_calculate_model_accuracy
 )
@@ -52,7 +54,8 @@ from model.arima_model_prediction import (
 from model.gm11_model_prediction import (
     gm11_train_model,
     gm11_predict_future_failures,
-    calculate_gm11_accuracy
+    calculate_gm11_accuracy,
+    calculate_residual_stats
 )
 
 # 导入SVR模型函数
@@ -66,8 +69,8 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
 # 示例失效数据
-SAMPLE_FAILURE_DATA = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151, 242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
-
+SAMPLE_FAILURE_DATA = [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 103, 109, 110, 111, 144, 151,
+                       242, 244, 245, 332, 379, 391, 400, 535, 793, 809, 844]
 
 #######################################################
 
@@ -88,26 +91,29 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+
 # --- 定义数据表模型 ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
 
+
 class Dataset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(100), nullable=False)      # 存储在磁盘上的文件名 (避免重名)
-    original_name = db.Column(db.String(100), nullable=False) # 用户上传时的原始文件名
+    filename = db.Column(db.String(100), nullable=False)  # 存储在磁盘上的文件名 (避免重名)
+    original_name = db.Column(db.String(100), nullable=False)  # 用户上传时的原始文件名
     upload_time = db.Column(db.DateTime, default=datetime.now)
-    data_count = db.Column(db.Integer, default=0)             # 数据点数量
-    user_id = db.Column(db.String(50), nullable=False)        # 关联的用户
+    data_count = db.Column(db.Integer, default=0)  # 数据点数量
+    user_id = db.Column(db.String(50), nullable=False)  # 关联的用户
+
 
 # 初始化数据库表并创建默认用户
 # 初始化数据库表并创建默认用户
 def sync_files_to_db():
     # 获取所有已存在于数据库中的文件名
     existing_db_filenames = {d.filename for d in Dataset.query.all()}
-    
+
     # 扫描 uploads 文件夹
     for filename in os.listdir(app.config["UPLOAD_FOLDER"]):
         if filename.endswith((".csv", ".txt")) and filename not in existing_db_filenames:
@@ -117,26 +123,26 @@ def sync_files_to_db():
                     content = f.read().replace("\n", ",")
                     data_points = [x for x in content.split(",") if x.strip()]
                     count = len(data_points)
-                
+
                 # 尝试从文件名中解析 user_id (假设格式为 user_id_timestamp_original_name.ext)
                 parts = filename.split("_")
-                inferred_user_id = "unknown" # 默认值
-                if len(parts) >= 3: # 至少有 user_id_timestamp_name
+                inferred_user_id = "unknown"  # 默认值
+                if len(parts) >= 3:  # 至少有 user_id_timestamp_name
                     inferred_user_id = parts[0]
-                
+
                 # 如果解析出的用户不存在，则使用 admin 或其他默认用户
                 if not User.query.filter_by(username=inferred_user_id).first():
-                    inferred_user_id = "admin" # fallback to admin
+                    inferred_user_id = "admin"  # fallback to admin
 
                 # 尝试从文件名中恢复 original_name
-                original_name = filename # 默认值
-                if len(parts) > 2: # user_id_timestamp_originalName.ext
+                original_name = filename  # 默认值
+                if len(parts) > 2:  # user_id_timestamp_originalName.ext
                     # 原始文件名可能是 timestamp_originalName.ext 或 originalName.ext
                     # 尝试去除 user_id 和 timestamp 部分
                     original_name_parts = filename.split("_", 2)
-                    if len(original_name_parts) == 3: # 假设 user_id_timestamp_original_name.ext
+                    if len(original_name_parts) == 3:  # 假设 user_id_timestamp_original_name.ext
                         original_name = original_name_parts[2]
-                    else: # 假设 timestamp_original_name.ext
+                    else:  # 假设 timestamp_original_name.ext
                         original_name_parts = filename.split("_", 1)
                         if len(original_name_parts) == 2:
                             original_name = original_name_parts[1]
@@ -145,7 +151,7 @@ def sync_files_to_db():
                     filename=filename,
                     original_name=original_name,
                     data_count=count,
-                    upload_time=datetime.fromtimestamp(os.path.getmtime(file_path)), # 使用文件修改时间
+                    upload_time=datetime.fromtimestamp(os.path.getmtime(file_path)),  # 使用文件修改时间
                     user_id=inferred_user_id
                 )
                 db.session.add(new_dataset)
@@ -153,6 +159,7 @@ def sync_files_to_db():
             except Exception as e:
                 print(f"Error syncing file {filename}: {e}")
     db.session.commit()
+
 
 with app.app_context():
     db.create_all()
@@ -166,7 +173,8 @@ with app.app_context():
             new_user = User(username=uname, password=pword)
             db.session.add(new_user)
     db.session.commit()
-    sync_files_to_db() # 在应用启动时同步文件
+    sync_files_to_db()  # 在应用启动时同步文件
+
 
 # --- 添加数据管理路由 ---
 
@@ -177,15 +185,16 @@ def data_management():
         return redirect(url_for('login'))
     return render_template('data_management.html')
 
+
 # 2. 上传数据 API
 @app.route('/api/data/upload', methods=['POST'])
 def upload_data():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': '无文件部分'})
-        
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({'success': False, 'error': '未选择文件'})
@@ -196,15 +205,43 @@ def upload_data():
         safe_name = secure_filename(file.filename)
         saved_filename = f"{session['username']}_{timestamp}_{safe_name}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
-        
+
         file.save(file_path)
-        
-        # 读取数据以获取点数 (简单解析逗号分隔或换行)
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read().replace('\n', ',')
-            # 简单的清洗逻辑
-            data_points = [x for x in content.split(',') if x.strip()]
-            count = len(data_points)
+
+        # 根据文件类型解析数据点数量，支持 TXT / CSV / Excel
+        ext = os.path.splitext(file.filename)[1].lower()
+        data_values = []
+
+        try:
+            if ext in ['.xls', '.xlsx']:
+                # Excel：使用 pandas + openpyxl 读取所有单元格并展平，然后过滤出数值
+                df = pd.read_excel(file_path, header=None, engine='openpyxl')
+                flat = df.values.flatten()
+                series = pd.to_numeric(flat, errors='coerce')
+                data_values = [float(v) for v in series if pd.notna(v)]
+            elif ext in ['.csv']:
+                # CSV：同样用 pandas 读取，兼容不同编码和分隔
+                df = pd.read_csv(file_path, header=None, encoding='utf-8', engine='python')
+                flat = df.values.flatten()
+                series = pd.to_numeric(flat, errors='coerce')
+                data_values = [float(v) for v in series if pd.notna(v)]
+            else:
+                # 其他文本：按逗号/换行解析
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read().replace('\n', ',')
+                    for x in content.split(','):
+                        x = x.strip()
+                        if not x:
+                            continue
+                        try:
+                            data_values.append(float(x))
+                        except ValueError:
+                            continue
+        except Exception as e:
+            # Excel/CSV 解析失败，返回明确错误，避免“只剩一个点”的误导情况
+            return jsonify({'success': False, 'error': f'数据文件解析失败，请确认为纯数值 Excel/CSV 并已安装 openpyxl：{str(e)}'}), 400
+
+        count = len(data_values)
 
         # 写入数据库
         new_dataset = Dataset(
@@ -215,20 +252,21 @@ def upload_data():
         )
         db.session.add(new_dataset)
         db.session.commit()
-        
+
         return jsonify({'success': True, 'message': '上传成功'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
 
 # 3. 获取列表 API
 @app.route('/api/data/list', methods=['GET'])
 def list_datasets():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-        
+
     # 只查询当前用户的数据
     datasets = Dataset.query.filter_by(user_id=session['username']).order_by(Dataset.upload_time.desc()).all()
-    
+
     return jsonify({
         'success': True,
         'data': [{
@@ -239,24 +277,25 @@ def list_datasets():
         } for d in datasets]
     })
 
+
 # 4. 删除数据 API
 @app.route('/api/data/delete/<int:id>', methods=['POST'])
 def delete_dataset(id):
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-        
+
     dataset = Dataset.query.get_or_404(id)
-    
+
     # 权限检查
     if dataset.user_id != session['username']:
         return jsonify({'success': False, 'error': '无权删除此文件'}), 403
-        
+
     try:
         # 删除磁盘文件
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], dataset.filename)
         if os.path.exists(file_path):
             os.remove(file_path)
-            
+
         # 删除数据库记录
         db.session.delete(dataset)
         db.session.commit()
@@ -264,28 +303,51 @@ def delete_dataset(id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+
 # 5. 获取具体数据内容 API (供模型页面调用)
 @app.route('/api/data/get/<int:id>', methods=['GET'])
 def get_dataset_content(id):
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-        
+
     dataset = Dataset.query.get_or_404(id)
     if dataset.user_id != session['username']:
         return jsonify({'success': False, 'error': '无权访问'}), 403
-        
+
     try:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], dataset.filename)
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            # 简单的解析逻辑：支持换行或逗号分隔
-            content = content.replace('\n', ',')
-            data_values = [float(x.strip()) for x in content.split(',') if x.strip() and x.strip().replace('.','',1).isdigit()]
-            
+        ext = os.path.splitext(dataset.original_name)[1].lower()
+        data_values = []
+
+        if ext in ['.xls', '.xlsx']:
+            # Excel 数据解析：读取所有单元格并展平
+            df = pd.read_excel(file_path, header=None)
+            flat = df.values.flatten()
+            series = pd.to_numeric(flat, errors='coerce')
+            data_values = [float(v) for v in series if pd.notna(v)]
+        elif ext in ['.csv']:
+            # CSV 数据解析
+            df = pd.read_csv(file_path, header=None)
+            flat = df.values.flatten()
+            series = pd.to_numeric(flat, errors='coerce')
+            data_values = [float(v) for v in series if pd.notna(v)]
+        else:
+            # 文本文件按逗号或换行解析
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read().replace('\n', ',')
+                for x in content.split(','):
+                    x = x.strip()
+                    if not x:
+                        continue
+                    try:
+                        data_values.append(float(x))
+                    except ValueError:
+                        continue
+
         return jsonify({'success': True, 'data': data_values})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-    
+
 
 ####################################################################
 
@@ -295,40 +357,44 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+
 @app.route('/register', methods=['POST'])
 def register():
     username = request.form['username']
     password = request.form['password']
-    
+
     if User.query.filter_by(username=username).first():
         return render_template('login.html', error='Username already exists')
-    
+
     new_user = User(username=username, password=password)
     db.session.add(new_user)
     db.session.commit()
-    
+
     session['username'] = username
     return redirect(url_for('dashboard'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        
+
         user = User.query.filter_by(username=username, password=password).first()
         if user:
             session['username'] = username
             return redirect(url_for('dashboard'))
         else:
             return render_template('login.html', error='Invalid credentials')
-    
+
     return render_template('login.html')
+
 
 @app.route('/logout')
 def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -336,11 +402,13 @@ def dashboard():
         return render_template('dashboard.html', username=session['username'])
     return redirect(url_for('login'))
 
+
 @app.route('/models')
 def models():
     if 'username' in session:
         return render_template('models.html')
     return redirect(url_for('login'))
+
 
 @app.route('/model/jm', methods=['GET', 'POST'])
 def jm_model():
@@ -351,66 +419,70 @@ def jm_model():
             prediction_step = int(request.form.get('prediction_step', 5))
             ex = float(request.form.get('ex', 0.001))
             ey = float(request.form.get('ey', 0.001))
-            
+
             # 获取合适的失效数据
             if data_type == 'id':
                 failure_data = SAMPLE_FAILURE_DATA
             else:
                 failure_data = SAMPLE_FAILURE_DATA
-            
+
             # 执行JM模型预测
             try:
                 # 估计模型参数
                 N0, phi = jm_model_parameter_estimation(failure_data, ex, ey)
-                
+
                 if N0 is None or phi is None:
                     raise ValueError("JM模型参数估计失败")
-                
+
                 # 预测未来失效
                 prediction_results = jm_predict_future_failures(N0, phi, failure_data, prediction_step)
-                
+
                 # 计算模型准确率
                 accuracy_metrics = calculate_model_accuracy(N0, phi, failure_data)
-                
+
                 # 生成可靠度曲线数据点
                 if 'reliability_curve' in prediction_results and len(prediction_results['reliability_curve'][0]) > 0:
                     time_points, reliability_values = prediction_results['reliability_curve']
                 else:
                     time_points = np.array([])
                     reliability_values = np.array([])
-                
-                return render_template('jm_model.html', 
-                                     success=True,
-                                     message='预测成功完成！',
-                                     N0=round(N0, 4),
-                                     phi=round(phi, 6),
-                                     remaining_faults=round(prediction_results['remaining_faults'], 4),
-                                     next_failure_time=round(prediction_results['next_failure_time'], 2) if prediction_results['next_failure_time'] else 'N/A',
-                                     predicted_intervals=[round(interval, 2) for interval in prediction_results['predicted_intervals']],
-                                     cumulative_times=[round(time, 2) for time in prediction_results['cumulative_times']],
-                                     reliability_curve=list(zip(time_points.round(2), reliability_values.round(4))),
-                                     warning=prediction_results.get('warning'),
-                                     mae=round(accuracy_metrics['mae'], 2),
-                                     mse=round(accuracy_metrics['mse'], 2),
-                                     rmse=round(accuracy_metrics['rmse'], 2),
-                                     r2_score=round(accuracy_metrics['r2_score'], 4),
-                                     accuracy=round(accuracy_metrics['accuracy'], 2))
-            
+
+                return render_template('jm_model.html',
+                                       success=True,
+                                       message='预测成功完成！',
+                                       N0=round(N0, 4),
+                                       phi=round(phi, 6),
+                                       remaining_faults=round(prediction_results['remaining_faults'], 4),
+                                       next_failure_time=round(prediction_results['next_failure_time'], 2) if
+                                       prediction_results['next_failure_time'] else 'N/A',
+                                       predicted_intervals=[round(interval, 2) for interval in
+                                                            prediction_results['predicted_intervals']],
+                                       cumulative_times=[round(time, 2) for time in
+                                                         prediction_results['cumulative_times']],
+                                       reliability_curve=list(zip(time_points.round(2), reliability_values.round(4))),
+                                       warning=prediction_results.get('warning'),
+                                       mae=round(accuracy_metrics['mae'], 2),
+                                       mse=round(accuracy_metrics['mse'], 2),
+                                       rmse=round(accuracy_metrics['rmse'], 2),
+                                       r2_score=round(accuracy_metrics['r2_score'], 4),
+                                       accuracy=round(accuracy_metrics['accuracy'], 2))
+
             except Exception as e:
-                return render_template('jm_model.html', 
-                                     success=False,
-                                     message=f'预测过程中发生错误: {str(e)}')
-        
+                return render_template('jm_model.html',
+                                       success=False,
+                                       message=f'预测过程中发生错误: {str(e)}')
+
         # GET请求，显示页面
         return render_template('jm_model.html')
     return redirect(url_for('login'))
+
 
 # 添加API端点用于AJAX请求
 @app.route('/api/jm/predict', methods=['POST'])
 def api_jm_predict():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         # 尝试解析JSON数据（更稳健的方式，兼容不同Flask/Werkzeug版本或被意外覆盖的request对象）
         try:
@@ -434,17 +506,17 @@ def api_jm_predict():
                 data = json.loads(raw)
             except Exception:
                 return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         # 验证输入数据
         if not data:
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         # 获取并验证参数
         data_type = data.get('data_type', 'id')
         prediction_step = data.get('prediction_step', 5)
         ex = data.get('ex', 0.001)
         ey = data.get('ey', 0.001)
-        
+
         # 参数验证
         try:
             prediction_step = int(prediction_step)
@@ -452,16 +524,16 @@ def api_jm_predict():
             ey = float(ey)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
-        
+
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
-        
+
         if ex < 0 or ex > 1:
             return jsonify({'success': False, 'error': '预测精度ex必须在0-1之间'}), 400
-        
+
         if ey < 0 or ey > 1:
             return jsonify({'success': False, 'error': '预测精度ey必须在0-1之间'}), 400
-        
+
         # 优先使用请求中提供的 train_data（用于前百分比训练或自定义数据）
         train_data = data.get('train_data')
         test_data = data.get('test_data')
@@ -473,26 +545,27 @@ def api_jm_predict():
                 failure_data = SAMPLE_FAILURE_DATA
             else:
                 failure_data = SAMPLE_FAILURE_DATA
-        
+
         # 执行JM模型预测
         try:
             N0, phi = jm_model_parameter_estimation(failure_data, ex, ey)
-            
+
             if N0 is None or phi is None:
                 return jsonify({'success': False, 'error': 'JM模型参数估计失败'}), 400
-            
+
             prediction_results = jm_predict_future_failures(N0, phi, failure_data, prediction_step)
-            
+
             # 计算模型准确率
             accuracy_metrics = calculate_model_accuracy(N0, phi, failure_data)
-            
+
             # 准备响应数据
             response_data = {
                 'success': True,
                 'N0': round(N0, 4),
                 'phi': round(phi, 6),
                 'remaining_faults': round(prediction_results['remaining_faults'], 4),
-                'next_failure_time': round(prediction_results['next_failure_time'], 2) if prediction_results['next_failure_time'] else None,
+                'next_failure_time': round(prediction_results['next_failure_time'], 2) if prediction_results[
+                    'next_failure_time'] else None,
                 'predicted_intervals': [round(interval, 2) for interval in prediction_results['predicted_intervals']],
                 'cumulative_times': [round(time, 2) for time in prediction_results['cumulative_times']],
                 'mae': round(accuracy_metrics['mae'], 2),
@@ -508,21 +581,22 @@ def api_jm_predict():
                 response_data['used_train_preview'] = failure_data[:10]
             except Exception:
                 pass
-            
+
             # 添加可靠度曲线数据
             if 'reliability_curve' in prediction_results and len(prediction_results['reliability_curve'][0]) > 0:
                 time_points, reliability_values = prediction_results['reliability_curve']
-                response_data['reliability_curve'] = [{'time': round(t, 2), 'reliability': round(r, 4)} for t, r in zip(time_points, reliability_values)]
-            
+                response_data['reliability_curve'] = [{'time': round(t, 2), 'reliability': round(r, 4)} for t, r in
+                                                      zip(time_points, reliability_values)]
+
             # 添加警告信息
             if 'warning' in prediction_results:
                 response_data['warning'] = prediction_results['warning']
-            
+
             return jsonify(response_data)
-            
+
         except Exception as e:
             return jsonify({'success': False, 'error': f'模型预测错误: {str(e)}'}), 500
-    
+
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
@@ -580,6 +654,7 @@ def api_jm_train():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
 # GO模型路由
 @app.route('/model/go', methods=['GET', 'POST'])
 def go_model():
@@ -588,27 +663,27 @@ def go_model():
             # 获取表单数据
             data_type = request.form.get('data_type')
             prediction_step = int(request.form.get('prediction_step', 5))
-            
+
             # 获取合适的失效数据
             if data_type == 'id':
                 failure_data = SAMPLE_FAILURE_DATA
             else:
                 failure_data = SAMPLE_FAILURE_DATA
-            
+
             # 执行GO模型预测
             try:
                 # 估计模型参数
                 a, b = go_model_parameter_estimation(failure_data)
-                
+
                 if a is None or b is None:
                     raise ValueError("GO模型参数估计失败")
-                
+
                 # 预测未来失效
                 prediction_results = go_predict_future_failures(a, b, failure_data, prediction_step)
-                
+
                 # 计算模型准确率
                 accuracy_metrics = go_calculate_model_accuracy(a, b, failure_data)
-                
+
                 # 生成可靠度曲线数据点
                 if 'reliability_curve' in prediction_results and len(prediction_results['reliability_curve'][0]) > 0:
                     time_points, reliability_values = prediction_results['reliability_curve']
@@ -618,33 +693,35 @@ def go_model():
                     reliability_curve = list(zip(time_points, reliability_values))
                 else:
                     reliability_curve = []
-                
+
                 # 确保predicted_intervals和cumulative_times是列表
-                predicted_intervals = [round(float(interval), 2) for interval in prediction_results['predicted_intervals']]
+                predicted_intervals = [round(float(interval), 2) for interval in
+                                       prediction_results['predicted_intervals']]
                 cumulative_times = [round(float(time), 2) for time in prediction_results['cumulative_times']]
-                
-                return render_template('go_model.html', 
-                                     success=True,
-                                     message='预测成功完成！',
-                                     a=round(float(a), 4),
-                                     b=round(float(b), 6),
-                                     remaining_faults=round(float(prediction_results['remaining_faults']), 4),
-                                     next_failure_time=round(float(prediction_results['next_failure_time']), 2) if prediction_results['next_failure_time'] else 'N/A',
-                                     predicted_intervals=predicted_intervals,
-                                     cumulative_times=cumulative_times,
-                                     reliability_curve=reliability_curve,
-                                     warning=prediction_results.get('warning'),
-                                     mae=round(float(accuracy_metrics['mae']), 2),
-                                     mse=round(float(accuracy_metrics['mse']), 2),
-                                     rmse=round(float(accuracy_metrics['rmse']), 2),
-                                     r2_score=round(float(accuracy_metrics['r2_score']), 4),
-                                     accuracy=round(float(accuracy_metrics['accuracy']), 2))
-            
+
+                return render_template('go_model.html',
+                                       success=True,
+                                       message='预测成功完成！',
+                                       a=float(a),
+                                       b=float(b),
+                                       remaining_faults=round(float(prediction_results['remaining_faults']), 4),
+                                       next_failure_time=round(float(prediction_results['next_failure_time']), 2) if
+                                       prediction_results['next_failure_time'] else 'N/A',
+                                       predicted_intervals=predicted_intervals,
+                                       cumulative_times=cumulative_times,
+                                       reliability_curve=reliability_curve,
+                                       warning=prediction_results.get('warning'),
+                                       mae=round(float(accuracy_metrics['mae']), 2),
+                                       mse=round(float(accuracy_metrics['mse']), 2),
+                                       rmse=round(float(accuracy_metrics['rmse']), 2),
+                                       r2_score=round(float(accuracy_metrics['r2_score']), 4),
+                                       accuracy=round(float(accuracy_metrics['accuracy']), 2))
+
             except Exception as e:
-                return render_template('go_model.html', 
-                                     success=False,
-                                     message=f'预测过程中发生错误: {str(e)}')
-        
+                return render_template('go_model.html',
+                                       success=False,
+                                       message=f'预测过程中发生错误: {str(e)}')
+
         # GET请求，显示页面
         return render_template('go_model.html')
     return redirect(url_for('login'))
@@ -691,7 +768,8 @@ def nhpp_model():
                     params=[round(float(p), 4) for p in params],
                     remaining_faults=round(float(prediction_results['remaining_faults']), 4),
                     total_faults=round(float(prediction_results['total_faults']), 4),
-                    next_failure_time=round(float(prediction_results['next_failure_time']), 2) if prediction_results['next_failure_time'] else 'N/A',
+                    next_failure_time=round(float(prediction_results['next_failure_time']), 2) if prediction_results[
+                        'next_failure_time'] else 'N/A',
                     predicted_intervals=[round(float(x), 2) for x in prediction_results['predicted_intervals']],
                     cumulative_times=[round(float(x), 2) for x in prediction_results['cumulative_times']],
                     reliability_curve=reliability_curve,
@@ -713,12 +791,13 @@ def nhpp_model():
         return render_template('nhpp_model.html')
     return redirect(url_for('login'))
 
+
 # GO模型API端点
 @app.route('/api/go/predict', methods=['POST'])
 def api_go_predict():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         # 尝试解析JSON数据
         try:
@@ -741,24 +820,24 @@ def api_go_predict():
                 data = json.loads(raw)
             except Exception:
                 return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         # 验证输入数据
         if not data:
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         # 获取并验证参数
         data_type = data.get('data_type', 'id')
         prediction_step = data.get('prediction_step', 5)
-        
+
         # 参数验证
         try:
             prediction_step = int(prediction_step)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
-        
+
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
-        
+
         # 优先使用请求中提供的 train_data
         train_data = data.get('train_data')
         test_data = data.get('test_data')
@@ -769,30 +848,31 @@ def api_go_predict():
                 failure_data = SAMPLE_FAILURE_DATA
             else:
                 failure_data = SAMPLE_FAILURE_DATA
-        
+
         # 执行GO模型预测
         try:
             a, b = go_model_parameter_estimation(failure_data)
-            
+
             if a is None or b is None:
                 return jsonify({'success': False, 'error': 'GO模型参数估计失败'}), 400
-            
+
             prediction_results = go_predict_future_failures(a, b, failure_data, prediction_step)
-            
+
             # 计算模型准确率
             accuracy_metrics = go_calculate_model_accuracy(a, b, failure_data)
-            
+
             # 准备响应数据
             # 确保所有数值都是Python标量类型
             predicted_intervals = [round(float(interval), 2) for interval in prediction_results['predicted_intervals']]
             cumulative_times = [round(float(time), 2) for time in prediction_results['cumulative_times']]
-            
+
             response_data = {
                 'success': True,
                 'a': round(float(a), 4),
                 'b': round(float(b), 6),
                 'remaining_faults': round(float(prediction_results['remaining_faults']), 4),
-                'next_failure_time': round(float(prediction_results['next_failure_time']), 2) if prediction_results['next_failure_time'] else None,
+                'next_failure_time': round(float(prediction_results['next_failure_time']), 2) if prediction_results[
+                    'next_failure_time'] else None,
                 'predicted_intervals': predicted_intervals,
                 'cumulative_times': cumulative_times,
                 'mae': round(float(accuracy_metrics['mae']), 2),
@@ -801,33 +881,35 @@ def api_go_predict():
                 'r2_score': round(float(accuracy_metrics['r2_score']), 4),
                 'accuracy': round(float(accuracy_metrics['accuracy']), 2)
             }
-            
+
             try:
                 response_data['used_train_count'] = len(failure_data)
                 response_data['used_train_sum'] = float(np.sum(failure_data)) if len(failure_data) > 0 else 0.0
                 response_data['used_train_preview'] = failure_data[:10]
             except Exception:
                 pass
-            
+
             # 添加可靠度曲线数据
             if 'reliability_curve' in prediction_results and len(prediction_results['reliability_curve'][0]) > 0:
                 time_points, reliability_values = prediction_results['reliability_curve']
                 # 转换为numpy数组并取整，然后转换为列表
                 time_points = np.array(time_points).round(2).tolist()
                 reliability_values = np.array(reliability_values).round(4).tolist()
-                response_data['reliability_curve'] = [{'time': float(t), 'reliability': float(r)} for t, r in zip(time_points, reliability_values)]
-            
+                response_data['reliability_curve'] = [{'time': float(t), 'reliability': float(r)} for t, r in
+                                                      zip(time_points, reliability_values)]
+
             # 添加警告信息
             if 'warning' in prediction_results:
                 response_data['warning'] = prediction_results['warning']
-            
+
             return jsonify(response_data)
-            
+
         except Exception as e:
             return jsonify({'success': False, 'error': f'模型预测错误: {str(e)}'}), 500
-    
+
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
 
 @app.route('/api/go/train', methods=['POST'])
 def api_go_train():
@@ -856,7 +938,7 @@ def api_go_train():
                 data = json.loads(raw)
             except Exception:
                 return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         train_data = data.get('train_data')
 
         if not train_data or not isinstance(train_data, list) or len(train_data) < 2:
@@ -875,6 +957,7 @@ def api_go_train():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
 # BP神经网络模型路由
 @app.route('/model/bp', methods=['GET', 'POST'])
 def bp_model():
@@ -887,13 +970,13 @@ def bp_model():
             hidden_size = int(request.form.get('hidden_size', 10))
             lr = float(request.form.get('lr', 0.05))
             epochs = int(request.form.get('epochs', 1500))
-            
+
             # 获取合适的失效数据
             if data_type == 'id':
                 failure_data = SAMPLE_FAILURE_DATA
             else:
                 failure_data = SAMPLE_FAILURE_DATA
-            
+
             # 执行BP模型预测
             try:
                 # 训练模型
@@ -901,38 +984,42 @@ def bp_model():
                     failure_data, look_back=look_back, hidden_size=hidden_size,
                     lr=lr, epochs=epochs, verbose=False
                 )
-                
+
                 # 预测未来失效
                 prediction_results = bp_predict_future_failures(
                     model, failure_data, prediction_step=prediction_step, look_back=look_back
                 )
-                
+
                 # 计算模型准确率
                 accuracy_metrics = bp_calculate_model_accuracy(
                     model, failure_data, look_back=look_back
                 )
-                
-                return render_template('bp_model.html', 
-                                     success=True,
-                                     message='预测成功完成！',
-                                     predicted_times=[round(t, 2) for t in prediction_results['predicted_times']],
-                                     predicted_intervals=[round(interval, 2) for interval in prediction_results['predicted_intervals']],
-                                     cumulative_times=[round(time, 2) for time in prediction_results['cumulative_times']],
-                                     next_failure_time=round(prediction_results['next_failure_time'], 2) if prediction_results['next_failure_time'] else 'N/A',
-                                     mae=round(accuracy_metrics['mae'], 2),
-                                     mse=round(accuracy_metrics['mse'], 2),
-                                     rmse=round(accuracy_metrics['rmse'], 2),
-                                     r2_score=round(accuracy_metrics['r2_score'], 4),
-                                     accuracy=round(accuracy_metrics['accuracy'], 2))
-            
+
+                return render_template('bp_model.html',
+                                       success=True,
+                                       message='预测成功完成！',
+                                       predicted_times=[round(t, 2) for t in prediction_results['predicted_times']],
+                                       predicted_intervals=[round(interval, 2) for interval in
+                                                            prediction_results['predicted_intervals']],
+                                       cumulative_times=[round(time, 2) for time in
+                                                         prediction_results['cumulative_times']],
+                                       next_failure_time=round(prediction_results['next_failure_time'], 2) if
+                                       prediction_results['next_failure_time'] else 'N/A',
+                                       mae=round(accuracy_metrics['mae'], 2),
+                                       mse=round(accuracy_metrics['mse'], 2),
+                                       rmse=round(accuracy_metrics['rmse'], 2),
+                                       r2_score=round(accuracy_metrics['r2_score'], 4),
+                                       accuracy=round(accuracy_metrics['accuracy'], 2))
+
             except Exception as e:
-                return render_template('bp_model.html', 
-                                     success=False,
-                                     message=f'预测过程中发生错误: {str(e)}')
-        
+                return render_template('bp_model.html',
+                                       success=False,
+                                       message=f'预测过程中发生错误: {str(e)}')
+
         # GET请求，显示页面
         return render_template('bp_model.html')
     return redirect(url_for('login'))
+
 
 # BP模型API端点 - 训练
 @app.route('/api/bp/train', methods=['POST'])
@@ -962,7 +1049,7 @@ def api_bp_train():
                 data = json.loads(raw)
             except Exception:
                 return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         train_data = data.get('train_data')
         look_back = data.get('look_back', 5)
         hidden_size = data.get('hidden_size', 10)
@@ -993,7 +1080,7 @@ def api_bp_train():
             train_data, look_back=look_back, hidden_size=hidden_size,
             lr=lr, epochs=epochs, verbose=False
         )
-        
+
         resp = {
             'success': True,
             'look_back': look_back,
@@ -1013,12 +1100,13 @@ def api_bp_train():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
 # BP模型API端点 - 预测
 @app.route('/api/bp/predict', methods=['POST'])
 def api_bp_predict():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         # 尝试解析JSON数据
         try:
@@ -1041,11 +1129,11 @@ def api_bp_predict():
                 data = json.loads(raw)
             except Exception:
                 return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         # 验证输入数据
         if not data:
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
-        
+
         # 获取并验证参数
         data_type = data.get('data_type', 'id')
         prediction_step = data.get('prediction_step', 5)
@@ -1053,7 +1141,7 @@ def api_bp_predict():
         hidden_size = data.get('hidden_size', 10)
         lr = data.get('lr', 0.05)
         epochs = data.get('epochs', 1500)
-        
+
         # 参数验证
         try:
             prediction_step = int(prediction_step)
@@ -1063,7 +1151,7 @@ def api_bp_predict():
             epochs = int(epochs)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
-        
+
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
         if look_back < 1 or look_back > 20:
@@ -1074,7 +1162,7 @@ def api_bp_predict():
             return jsonify({'success': False, 'error': '学习率必须在0-1之间'}), 400
         if epochs < 1 or epochs > 10000:
             return jsonify({'success': False, 'error': '训练轮数必须在1-10000之间'}), 400
-        
+
         # 优先使用请求中提供的 train_data
         train_data = data.get('train_data')
         test_data = data.get('test_data')
@@ -1088,7 +1176,7 @@ def api_bp_predict():
             # 如果前端没有显式拆分测试集，则让后端自动划分验证集
             if not test_data:
                 test_data = None
-        
+
         # 执行BP模型预测
         try:
             # 训练模型
@@ -1096,12 +1184,12 @@ def api_bp_predict():
                 failure_data, look_back=look_back, hidden_size=hidden_size,
                 lr=lr, epochs=epochs, verbose=False
             )
-            
+
             # 预测未来失效
             prediction_results = bp_predict_future_failures(
                 model, failure_data, prediction_step=prediction_step, look_back=look_back
             )
-            
+
             # 计算模型准确率
             # 如果前端没有提供足够长的 test_data，则传入 None，由函数内部自动划分验证集
             effective_test_data = None
@@ -1110,14 +1198,16 @@ def api_bp_predict():
             accuracy_metrics = bp_calculate_model_accuracy(
                 model, failure_data, test_data=effective_test_data, look_back=look_back
             )
-            
+
             # 准备响应数据
             response_data = {
                 'success': True,
                 'predicted_times': [round(float(t), 2) for t in prediction_results['predicted_times']],
-                'predicted_intervals': [round(float(interval), 2) for interval in prediction_results['predicted_intervals']],
+                'predicted_intervals': [round(float(interval), 2) for interval in
+                                        prediction_results['predicted_intervals']],
                 'cumulative_times': [round(float(time), 2) for time in prediction_results['cumulative_times']],
-                'next_failure_time': round(float(prediction_results['next_failure_time']), 2) if prediction_results['next_failure_time'] else None,
+                'next_failure_time': round(float(prediction_results['next_failure_time']), 2) if prediction_results[
+                    'next_failure_time'] else None,
                 'mae': round(float(accuracy_metrics['mae']), 2),
                 'mse': round(float(accuracy_metrics['mse']), 2),
                 'rmse': round(float(accuracy_metrics['rmse']), 2),
@@ -1125,19 +1215,19 @@ def api_bp_predict():
                 'accuracy': round(float(accuracy_metrics['accuracy']), 2),
                 'final_loss': float(train_losses[-1]) if len(train_losses) > 0 else 0.0
             }
-            
+
             try:
                 response_data['used_train_count'] = len(failure_data)
                 response_data['used_train_sum'] = float(np.sum(failure_data)) if len(failure_data) > 0 else 0.0
                 response_data['used_train_preview'] = failure_data[:10]
             except Exception:
                 pass
-            
+
             return jsonify(response_data)
-            
+
         except Exception as e:
             return jsonify({'success': False, 'error': f'模型预测错误: {str(e)}'}), 500
-    
+
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
@@ -1276,7 +1366,8 @@ def api_nhpp_predict():
                 'model_type': used_model_type,
                 'remaining_faults': float(prediction_results['remaining_faults']),
                 'total_faults': float(prediction_results['total_faults']),
-                'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
+                'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results[
+                    'next_failure_time'] else None,
                 'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
                 'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
                 'reliability_curve': reliability_curve,
@@ -1302,6 +1393,7 @@ def api_nhpp_predict():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
 # ARIMA模型路由
 @app.route('/model/arima', methods=['GET', 'POST'])
 def arima_model():
@@ -1309,39 +1401,40 @@ def arima_model():
         return render_template('arima_model.html')
     return redirect(url_for('login'))
 
+
 # ARIMA模型API端点 - 训练
 @app.route('/api/arima/train', methods=['POST'])
 def api_arima_train():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         try:
             data = request.get_json(silent=True)
         except Exception:
             data = None
-        
+
         if data is None:
             raw = request.get_data(as_text=True)
             if not raw:
                 return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
             import json
             data = json.loads(raw)
-        
+
         train_data = data.get('train_data')
         order = data.get('order', [1, 1, 1])
-        
+
         if not train_data or not isinstance(train_data, list) or len(train_data) < 5:
             return jsonify({'success': False, 'error': 'ARIMA模型至少需要5个数据点'}), 400
-        
+
         try:
             train_data = [float(x) for x in train_data]
             order = tuple([int(x) for x in order]) if isinstance(order, list) else order
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '数据格式错误'}), 400
-        
+
         model, metrics = arima_train_model(train_data, order=order)
-        
+
         return jsonify({
             'success': True,
             'aic': metrics.get('aic', 0.0),
@@ -1352,52 +1445,54 @@ def api_arima_train():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
 # ARIMA模型API端点 - 预测
 @app.route('/api/arima/predict', methods=['POST'])
 def api_arima_predict():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         try:
             data = request.get_json(silent=True)
         except Exception:
             data = None
-        
+
         if data is None:
             raw = request.get_data(as_text=True)
             if not raw:
                 return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
             import json
             data = json.loads(raw)
-        
+
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
         order = data.get('order', [1, 1, 1])
-        
+
         if not train_data or len(train_data) < 5:
             train_data = SAMPLE_FAILURE_DATA
-        
+
         try:
             train_data = [float(x) for x in train_data]
             prediction_step = int(prediction_step)
             order = tuple([int(x) for x in order]) if isinstance(order, list) else order
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
-        
+
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
-        
+
         model, _ = arima_train_model(train_data, order=order)
         prediction_results = arima_predict_future_failures(model, train_data, prediction_step)
         accuracy_metrics = calculate_arima_accuracy(model, train_data)
-        
+
         return jsonify({
             'success': True,
             'predicted_times': [float(x) for x in prediction_results['predicted_times']],
             'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
             'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
-            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
+            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results[
+                'next_failure_time'] else None,
             'mae': float(accuracy_metrics['mae']),
             'mse': float(accuracy_metrics['mse']),
             'rmse': float(accuracy_metrics['rmse']),
@@ -1406,6 +1501,7 @@ def api_arima_predict():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
 
 # GM11模型路由
 @app.route('/model/gm11', methods=['GET', 'POST'])
@@ -1414,101 +1510,121 @@ def gm11_model():
         return render_template('gm11_model.html')
     return redirect(url_for('login'))
 
+
 # GM11模型API端点 - 训练
 @app.route('/api/gm11/train', methods=['POST'])
 def api_gm11_train():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         try:
             data = request.get_json(silent=True)
         except Exception:
             data = None
-        
+
         if data is None:
             raw = request.get_data(as_text=True)
             if not raw:
                 return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
             import json
             data = json.loads(raw)
-        
+
         train_data = data.get('train_data')
-        
+
         if not train_data or not isinstance(train_data, list) or len(train_data) < 4:
             return jsonify({'success': False, 'error': 'GM11模型至少需要4个数据点'}), 400
-        
+
         try:
             train_data = [float(x) for x in train_data]
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '数据格式错误'}), 400
-        
+
+        # 训练GM11模型
         params = gm11_train_model(train_data)
-        
+
+        # 返回正确的参数名称（使用theta和u而不是a和b）
         return jsonify({
             'success': True,
-            'a': params['a'],
-            'b': params['b'],
+            'theta': params['theta'],  # 修改这里
+            'u': params['u'],  # 修改这里
             'x0_1': params['x0_1'],
+            'x0_fit': params['x0_fit'],  # 添加拟合值
+            'residuals': params['residuals'],  # 添加残差
             'used_train_count': len(train_data)
         })
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
 
 # GM11模型API端点 - 预测
 @app.route('/api/gm11/predict', methods=['POST'])
 def api_gm11_predict():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         try:
             data = request.get_json(silent=True)
         except Exception:
             data = None
-        
+
         if data is None:
             raw = request.get_data(as_text=True)
             if not raw:
                 return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
             import json
             data = json.loads(raw)
-        
+
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
-        
+
         if not train_data or len(train_data) < 4:
-            train_data = SAMPLE_FAILURE_DATA
-        
+            # 使用示例失效时间间隔数据
+            train_data = [9, 3, 7, 2, 5, 3, 2, 6, 2, 6, 5, 15, 3, 6, 8, 6, 5, 16, 8, 6, 0, 32, 5, 89, 1, 0, 86, 35, 3,
+                          3, 126, 123, 18, 19]
+
         try:
             train_data = [float(x) for x in train_data]
             prediction_step = int(prediction_step)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
-        
+
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
-        
+
+        # 训练模型并预测
         params = gm11_train_model(train_data)
         prediction_results = gm11_predict_future_failures(params, train_data, prediction_step)
         accuracy_metrics = calculate_gm11_accuracy(params, train_data)
-        
-        return jsonify({
+
+        # 计算残差统计
+        residual_stats = calculate_residual_stats(params.get('residuals', []))
+
+        # 确保所有返回字段都存在
+        response_data = {
             'success': True,
-            'a': float(params['a']),
-            'b': float(params['b']),
             'predicted_times': [float(x) for x in prediction_results['predicted_times']],
             'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
             'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
-            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
-            'mae': float(accuracy_metrics['mae']),
-            'mse': float(accuracy_metrics['mse']),
-            'rmse': float(accuracy_metrics['rmse']),
-            'r2_score': float(accuracy_metrics['r2_score']),
-            'accuracy': float(accuracy_metrics['accuracy'])
-        })
+            # 'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results[
+            #     'next_failure_time'] else None,
+            'mae': round(float(accuracy_metrics['mae']),2),
+            'mse': round(float(accuracy_metrics['mse']),2),
+            'rmse': round(float(accuracy_metrics['rmse']),2),
+            'r2_score': round(float(accuracy_metrics['r2_score']),2),
+            'accuracy': round(float(accuracy_metrics['accuracy']),2),
+            'full_predicted_intervals': [float(x) for x in prediction_results['full_predicted_intervals']],
+            'x0_hist_fit': [float(x) for x in prediction_results['x0_hist_fit']],
+            'residuals': [float(x) for x in params.get('residuals', [])],  # 从params中获取残差
+            'original_intervals': [float(x) for x in train_data],  # 原始数据
+            'residual_stats': residual_stats
+        }
+
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
 
 # SVR模型路由
 @app.route('/model/svr', methods=['GET', 'POST'])
@@ -1517,35 +1633,37 @@ def svr_model():
         return render_template('svr_model.html')
     return redirect(url_for('login'))
 
+
 # SVR模型API端点 - 训练
 @app.route('/api/svr/train', methods=['POST'])
 def api_svr_train():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         try:
             data = request.get_json(silent=True)
         except Exception:
             data = None
-        
+
         if data is None:
             raw = request.get_data(as_text=True)
             if not raw:
                 return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
             import json
             data = json.loads(raw)
-        
+
         train_data = data.get('train_data')
-        look_back = data.get('look_back', 8)  # 根据图6.11，m值常用为8
+        # 与模型实现保持一致：默认 look_back = 8
+        look_back = data.get('look_back', 8)
         kernel = data.get('kernel', 'rbf')
         C = data.get('C', 100.0)
         gamma = data.get('gamma', 'scale')
         epsilon = data.get('epsilon', 0.1)
-        
+
         if not train_data or not isinstance(train_data, list) or len(train_data) < look_back + 1:
             return jsonify({'success': False, 'error': f'SVR模型至少需要{look_back + 1}个数据点'}), 400
-        
+
         try:
             train_data = [float(x) for x in train_data]
             look_back = int(look_back)
@@ -1554,6 +1672,7 @@ def api_svr_train():
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
         
+        # 与当前 svr_train_model 签名保持一致：返回 (model, train_metrics, t_min, t_max)
         model, train_metrics, t_min, t_max = svr_train_model(
             train_data,
             look_back=look_back,
@@ -1562,7 +1681,7 @@ def api_svr_train():
             gamma=gamma,
             epsilon=epsilon
         )
-        
+
         return jsonify({
             'success': True,
             'train_mae': train_metrics['mae'],
@@ -1575,33 +1694,35 @@ def api_svr_train():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
 # SVR模型API端点 - 预测
 @app.route('/api/svr/predict', methods=['POST'])
 def api_svr_predict():
     if 'username' not in session:
         return jsonify({'success': False, 'error': '未登录'}), 401
-    
+
     try:
         try:
             data = request.get_json(silent=True)
         except Exception:
             data = None
-        
+
         if data is None:
             raw = request.get_data(as_text=True)
             if not raw:
                 return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
             import json
             data = json.loads(raw)
-        
+
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
-        look_back = data.get('look_back', 8)  # 根据图6.11，m值常用为8
+        # 与模型实现保持一致：默认 look_back = 8
+        look_back = data.get('look_back', 8)
         kernel = data.get('kernel', 'rbf')
         C = data.get('C', 100.0)
         gamma = data.get('gamma', 'scale')
         epsilon = data.get('epsilon', 0.1)
-        
+
         if not train_data or len(train_data) < look_back + 1:
             train_data = SAMPLE_FAILURE_DATA
         
@@ -1617,6 +1738,7 @@ def api_svr_predict():
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
         
+        # 先根据训练数据重新训练一次模型，得到 t_min / t_max
         model, _, t_min, t_max = svr_train_model(
             train_data,
             look_back=look_back,
@@ -1626,17 +1748,19 @@ def api_svr_predict():
             epsilon=epsilon
         )
         
+        # 预测与精度计算都基于当前训练好的模型和同一批数据
         prediction_results = svr_predict_future_failures(
             model, train_data, prediction_step, look_back, t_min, t_max
         )
         accuracy_metrics = calculate_svr_accuracy(model, train_data, look_back, t_min, t_max)
-        
+
         return jsonify({
             'success': True,
             'predicted_times': [float(x) for x in prediction_results['predicted_times']],
             'predicted_intervals': [float(x) for x in prediction_results['predicted_intervals']],
             'cumulative_times': [float(x) for x in prediction_results['cumulative_times']],
-            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results['next_failure_time'] else None,
+            'next_failure_time': float(prediction_results['next_failure_time']) if prediction_results[
+                'next_failure_time'] else None,
             'mae': float(accuracy_metrics['mae']),
             'mse': float(accuracy_metrics['mse']),
             'rmse': float(accuracy_metrics['rmse']),
@@ -1646,9 +1770,178 @@ def api_svr_predict():
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
 
+
+@app.route('/model/compare', methods=['GET'])
+def model_compare():
+    """模型对比分析页面"""
+    if 'username' in session:
+        return render_template('model_compare.html')
+    return redirect(url_for('login'))
+
+
+@app.route('/api/model/compare', methods=['POST'])
+def api_model_compare():
+    """在同一数据集上对多个模型的精度指标进行对比分析"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': '未登录'}), 401
+
+    try:
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+
+        if data is None:
+            raw = request.get_data(as_text=True)
+            if not raw:
+                return jsonify({'success': False, 'error': '请求必须包含JSON数据'}), 400
+            import json
+            data = json.loads(raw)
+
+        train_data = data.get('train_data')
+        if not isinstance(train_data, list) or len(train_data) < 3:
+            train_data = SAMPLE_FAILURE_DATA
+        try:
+            train_series = [float(x) for x in train_data]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '训练数据必须为数值列表'}), 400
+
+        data_type = data.get('data_type', 'interval')  # interval 或 cumulative
+        if data_type == 'cumulative':
+            # 将累计失效时间点转换为失效间隔
+            if len(train_series) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [train_series[0]]
+            for i in range(1, len(train_series)):
+                diffs.append(train_series[i] - train_series[i-1])
+            train_series = diffs
+
+        model_keys = data.get('models') or ['jm', 'go', 'nhpp', 'bp', 'arima', 'gm11', 'svr']
+        model_keys = list(dict.fromkeys(model_keys))  # 去重保持顺序
+
+        results = {}
+
+        # JM 模型
+        if 'jm' in model_keys:
+            try:
+                ex = float(data.get('jm_ex', 0.001))
+                ey = float(data.get('jm_ey', 0.001))
+                N0, phi = jm_model_parameter_estimation(train_series, ex, ey)
+                jm_metrics = calculate_model_accuracy(N0, phi, train_series)
+                results['jm'] = {
+                    'name': 'JM 模型',
+                    **{k: float(v) for k, v in jm_metrics.items()}
+                }
+            except Exception as e:
+                results['jm'] = {'name': 'JM 模型', 'error': str(e)}
+
+        # GO 模型
+        if 'go' in model_keys:
+            try:
+                a, b = go_model_parameter_estimation(train_series)
+                go_metrics = go_calculate_model_accuracy(a, b, train_series)
+                results['go'] = {
+                    'name': 'GO 模型',
+                    **{k: float(v) for k, v in go_metrics.items()}
+                }
+            except Exception as e:
+                results['go'] = {'name': 'GO 模型', 'error': str(e)}
+
+        # NHPP 模型（自动选择类型）
+        if 'nhpp' in model_keys:
+            try:
+                params, used_model_type = nhpp_model_parameter_estimation(
+                    train_series, model_type=data.get('nhpp_model_type', 'exponential')
+                )
+                nhpp_metrics = calculate_nhpp_model_accuracy(params, used_model_type, train_series)
+                results['nhpp'] = {
+                    'name': f'NHPP 模型 ({used_model_type})',
+                    **{k: float(v) for k, v in nhpp_metrics.items()}
+                }
+            except Exception as e:
+                results['nhpp'] = {'name': 'NHPP 模型', 'error': str(e)}
+
+        # BP 神经网络
+        if 'bp' in model_keys:
+            try:
+                look_back = int(data.get('bp_look_back', 5))
+                hidden_size = int(data.get('bp_hidden_size', 10))
+                lr = float(data.get('bp_lr', 0.05))
+                epochs = int(data.get('bp_epochs', 1500))
+                bp_model_inst, _, _, _ = bp_train_model(
+                    train_series, look_back=look_back,
+                    hidden_size=hidden_size, lr=lr, epochs=epochs, verbose=False
+                )
+                bp_metrics = bp_calculate_model_accuracy(
+                    bp_model_inst, train_series, look_back=look_back
+                )
+                results['bp'] = {
+                    'name': 'BP 神经网络',
+                    **{k: float(v) for k, v in bp_metrics.items()}
+                }
+            except Exception as e:
+                results['bp'] = {'name': 'BP 神经网络', 'error': str(e)}
+
+        # ARIMA 模型
+        if 'arima' in model_keys:
+            try:
+                order = data.get('arima_order', [1, 1, 1])
+                if isinstance(order, list):
+                    order = tuple(int(x) for x in order)
+                arima_model_inst, _ = arima_train_model(train_series, order=order)
+                arima_metrics = calculate_arima_accuracy(arima_model_inst, train_series)
+                results['arima'] = {
+                    'name': f'ARIMA{order}',
+                    **{k: float(v) for k, v in arima_metrics.items()}
+                }
+            except Exception as e:
+                results['arima'] = {'name': 'ARIMA 模型', 'error': str(e)}
+
+        # GM11 模型
+        if 'gm11' in model_keys:
+            try:
+                gm_params = gm11_train_model(train_series)
+                gm_metrics = calculate_gm11_accuracy(gm_params, train_series)
+                results['gm11'] = {
+                    'name': 'GM(1,1) 模型',
+                    **{k: float(v) for k, v in gm_metrics.items()}
+                }
+            except Exception as e:
+                results['gm11'] = {'name': 'GM(1,1) 模型', 'error': str(e)}
+
+        # SVR 模型
+        if 'svr' in model_keys:
+            try:
+                look_back = int(data.get('svr_look_back', 8))
+                epsilon = float(data.get('svr_epsilon', 0.1))
+                kernel = data.get('svr_kernel', None)
+                # 使用自动核与 PSO 优化
+                _, svr_metrics, _, _ = svr_train_model(
+                    train_series,
+                    look_back=look_back,
+                    kernel=kernel,
+                    C=None,
+                    gamma=None,
+                    epsilon=epsilon,
+                    use_pso=True,
+                    auto_kernel=True,
+                )
+                results['svr'] = {
+                    'name': 'SVR 模型',
+                    **{k: float(v) for k, v in svr_metrics.items()}
+                }
+            except Exception as e:
+                results['svr'] = {'name': 'SVR 模型', 'error': str(e)}
+
+        return jsonify({'success': True, 'results': results, 'used_train_count': len(train_series)})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500
+
+
 if __name__ == '__main__':
     # 确保static目录存在用于保存图表
     if not os.path.exists('static'):
         os.makedirs('static')
-    
+
     app.run(debug=True, host='0.0.0.0', port=5000)

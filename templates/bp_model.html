@@ -38,11 +38,12 @@
                 <h3>数据集选择</h3>
                 <div class="form-group">
                     <label for="dataset-select">选择数据集:</label>
-                    <select id="dataset-select">
+                    <select id="dataset-select" style="width:100%; height:38px; border:1px solid #d9d9d9; border-radius:4px; padding:6px 8px;">
                         <option value="default">默认数据集</option>
                         <option value="custom">自定义数据集</option>
                         <option value="dataset1">数据集1 (测试数据集)</option>
                         <option value="dataset2">数据集2 (项目数据集)</option>
+                        <optgroup id="cloud-datasets-group" label="我的云端数据"></optgroup>
                     </select>
                     <small>选择不同的数据集进行模型训练和预测</small>
                 </div>
@@ -191,6 +192,58 @@
         messageArea.appendChild(messageDiv);
         if (type !== 'error') { setTimeout(() => { messageDiv.remove(); }, 3000); }
     }
+
+    // 数字格式化，控制显示位数
+    function formatNum(value, digits = 6) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return Number(n.toFixed(digits)).toString();
+    }
+
+    function formatPct(value, digits = 3) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return `${formatNum(n, digits)}%`;
+    }
+
+    // 拉取云端数据列表，填充下拉框
+    function fetchDatasetList() {
+        fetch('/api/data/list')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('dataset-select');
+                let group = document.getElementById('cloud-datasets-group');
+                if (!group) {
+                    group = document.createElement('optgroup');
+                    group.id = 'cloud-datasets-group';
+                    group.label = '我的云端数据';
+                    select.appendChild(group);
+                }
+                group.innerHTML = '';
+                data.data.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = `db:${item.id}`;
+                    opt.textContent = `[云端] ${item.name} (${item.count}点)`;
+                    group.appendChild(opt);
+                });
+            }
+        })
+        .catch(() => {});
+    }
+
+    // 数字格式化，控制显示位数
+    function formatNum(value, digits = 6) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return Number(n.toFixed(digits)).toString();
+    }
+
+    function formatPct(value, digits = 3) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return `${formatNum(n, digits)}%`;
+    }
     
     function parseCustomDataset() {
         const input = document.getElementById('train-data-input').value.trim();
@@ -221,6 +274,30 @@
     function loadDataset(datasetName) {
         try {
             let dataset;
+            // 处理云端数据
+            if (datasetName && datasetName.startsWith('db:')) {
+                const id = datasetName.split(':')[1];
+                fetch(`/api/data/get/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        currentDataset = data.data || [];
+                        const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+                        const splitResult = splitTrainTestData(currentDataset, ratio);
+                        trainData = splitResult.train;
+                        testData = splitResult.test;
+                        showMessage(`云端数据加载成功 (训练: ${trainData.length}, 测试: ${testData.length})`, 'success');
+                        updateDatasetPreview(currentDataset);
+                        modelTrained = false;
+                        updateCharts(trainData, []);
+                    } else {
+                        showMessage('加载失败: ' + data.error, 'error');
+                    }
+                })
+                .catch(() => showMessage('网络错误', 'error'));
+                return true;
+            }
+
             if (datasetName === 'custom') {
                 dataset = parseCustomDataset();
                 if (!dataset) return false;
@@ -345,11 +422,11 @@
         const accuracyMetrics = document.getElementById('accuracy-metrics');
         accuracyMetrics.style.display = 'grid'; // 适配 CSS Grid
         
-        document.getElementById('mae-value').textContent = data.mae !== undefined ? `${data.mae}` : 'N/A';
-        document.getElementById('mse-value').textContent = data.mse !== undefined ? `${data.mse}` : 'N/A';
-        document.getElementById('rmse-value').textContent = data.rmse !== undefined ? `${data.rmse}` : 'N/A';
-        document.getElementById('r2-value').textContent = data.r2_score !== undefined ? `${data.r2_score}` : 'N/A';
-        document.getElementById('accuracy-value').textContent = data.accuracy !== undefined ? `${data.accuracy}%` : 'N/A';
+        document.getElementById('mae-value').textContent = formatNum(data.mae, 6);
+        document.getElementById('mse-value').textContent = formatNum(data.mse, 6);
+        document.getElementById('rmse-value').textContent = formatNum(data.rmse, 6);
+        document.getElementById('r2-value').textContent = formatNum(data.r2_score, 6);
+        document.getElementById('accuracy-value').textContent = formatPct(data.accuracy, 3);
         
         const resultDiv = document.getElementById('result-data');
         resultDiv.innerHTML = `
@@ -424,6 +501,7 @@
         
         document.querySelectorAll('.tab')[0].click();
         loadDataset('default');
+        fetchDatasetList();
     });
 </script>
 {% endblock %}

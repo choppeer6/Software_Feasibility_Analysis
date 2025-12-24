@@ -201,6 +201,19 @@
         messageArea.appendChild(messageDiv);
         if (type !== 'error') setTimeout(() => { messageDiv.remove(); }, 3000);
     }
+
+    // 数字格式化，控制显示位数
+    function formatNum(value, digits = 6) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return Number(n.toFixed(digits)).toString();
+    }
+
+    function formatPct(value, digits = 3) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'N/A';
+        return `${formatNum(n, digits)}%`;
+    }
     
     function parseCustomDataset() {
         const input = document.getElementById('train-data-input').value.trim();
@@ -340,7 +353,6 @@
     }
     
     function performPrediction() {
-        if (!modelTrained) { showMessage("请先训练模型", 'error'); return; }
         if (trainData.length === 0) { showMessage("请先加载数据集", 'error'); return; }
         if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
         try {
@@ -373,11 +385,11 @@
     function updatePredictionResults(data) {
         const accuracyMetrics = document.getElementById('accuracy-metrics');
         accuracyMetrics.style.display = 'grid';
-        document.getElementById('mae-value').textContent = data.mae !== undefined ? `${data.mae}` : 'N/A';
-        document.getElementById('mse-value').textContent = data.mse !== undefined ? `${data.mse}` : 'N/A';
-        document.getElementById('rmse-value').textContent = data.rmse !== undefined ? `${data.rmse}` : 'N/A';
-        document.getElementById('r2-value').textContent = data.r2_score !== undefined ? `${data.r2_score}` : 'N/A';
-        document.getElementById('accuracy-value').textContent = data.accuracy !== undefined ? `${data.accuracy}%` : 'N/A';
+        document.getElementById('mae-value').textContent = formatNum(data.mae, 6);
+        document.getElementById('mse-value').textContent = formatNum(data.mse, 6);
+        document.getElementById('rmse-value').textContent = formatNum(data.rmse, 6);
+        document.getElementById('r2-value').textContent = formatNum(data.r2_score, 6);
+        document.getElementById('accuracy-value').textContent = formatPct(data.accuracy, 3);
         const resultDiv = document.getElementById('result-data');
         resultDiv.innerHTML = `<h4>预测结果</h4><p><strong>模型参数:</strong> N0 = ${data.N0}, φ = ${data.phi}</p><p><strong>剩余故障数:</strong> ${data.remaining_faults}</p><p><strong>下一次失效预测时间:</strong> ${data.next_failure_time !== undefined ? data.next_failure_time : 'N/A'}</p><h5>未来失效时间间隔预测:</h5><ul>${data.predicted_intervals && data.predicted_intervals.length > 0 ? data.predicted_intervals.map((interval, i) => `<li>第${i+1}次: ${interval}</li>`).join('') : '<li>无预测数据</li>'}</ul>`;
         updateCharts(data.reliability_curve || [], data.historical_failures || trainData, data.predicted_intervals || []);

@@ -12,7 +12,7 @@
               <div class="section">
                         <h3>GO模型简介</h3>
                         <p>GO模型（Goel-Okumoto模型）是软件可靠性分析中经典的NHPP（非齐次泊松过程）模型之一，由Goel和Okumoto在1979年提出，用于评估和预测软件系统的可靠性。</p>
-                        
+
                         <h4>模型基本概念</h4>
                         <ul>
                             <li>假设软件中最终存在a个故障（渐近故障数）</li>
@@ -20,7 +20,7 @@
                             <li>累计失效数遵循非齐次泊松过程</li>
                             <li>模型参数包括最终故障数a和故障检测率b</li>
                         </ul>
-                        
+
                         <h4>模型应用场景</h4>
                         <ul>
                             <li>软件测试过程中的可靠性评估</li>
@@ -29,7 +29,7 @@
                             <li>软件发布决策支持</li>
                             <li>测试资源分配优化</li>
                         </ul>
-                        
+
                         <h4>模型数学表达式</h4>
                         <p>GO模型的核心数学表达式为：</p>
                         <ul>
@@ -38,7 +38,7 @@
                             <li>可靠度函数：R(t) = e^(-a×(1-e^(-b×t)))</li>
                             <li>故障检测率：随时间指数衰减</li>
                         </ul>
-                        
+
                         <h4>模型优势</h4>
                         <ul>
                             <li>模型结构简单，参数易于估计</li>
@@ -46,7 +46,7 @@
                             <li>能够较好地描述软件可靠性增长过程</li>
                             <li>预测精度较高</li>
                         </ul>
-                        
+
                         <h4>模型局限性</h4>
                         <ul>
                             <li>假设故障检测率随时间指数衰减</li>
@@ -57,15 +57,17 @@
                 </div>
         </div>
         <div id="dataset-content" style="display: none;">
-            <div class="dataset-section">    
+            <div class="dataset-section">
                 <h3>数据集配置</h3>
                 <div class="form-group">
                     <label for="dataset-select">选择数据集:</label>
-                    <select id="dataset-select">
+                    <select id="dataset-select" style="width:100%; height:38px; border:1px solid #d9d9d9; border-radius:4px; padding:6px 8px;">
                         <option value="default">默认数据集</option>
                         <option value="custom">自定义数据集</option>
                         <option value="dataset1">数据集1 (测试数据集)</option>
-                        <option value="dataset2">数据集2 (项目数据集)</option>
+                        <option value="dataset2">项目数据集</option>
+                        <option value="dataset3">GO数据集</option>
+                        <optgroup id="cloud-datasets-group" label="我的云端数据"></optgroup>
                     </select>
                 </div>
                 <div id="custom-dataset-group" style="display: none;">
@@ -73,12 +75,17 @@
                         <label for="train-data-input">输入失效时间数据 (用逗号分隔):</label>
                         <textarea id="train-data-input" rows="5"></textarea>
                     </div>
-                    <div class="slider-container">
-                        <div class="slider-label" style="display:flex;justify-content:space-between;"><span>训练数据比例: <strong id="train-ratio-value">70%</strong></span></div>
-                        <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width:100%;">
-                    </div>
                     <div class="form-group"><button id="load-dataset-btn">加载数据</button></div>
                 </div>
+
+                <!-- 新增训练数据比例滑块 -->
+                <div class="slider-container" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                    <div class="slider-label" style="display:flex;justify-content:space-between;margin-bottom: 10px;">
+                        <span>训练数据比例: <strong id="train-ratio-value" style="color: var(--primary-color);">70%</strong></span>
+                    </div>
+                    <input type="range" id="train-ratio-slider" min="10" max="90" value="70" style="width:100%;">
+                </div>
+
                 <div id="dataset-preview" class="data-preview" style="margin-top:20px;padding:15px;background:#fafafa;border:1px dashed #ddd;color:#666;"></div>
             </div>
         </div>
@@ -88,8 +95,8 @@
                 <input type="number" id="prediction-step" name="prediction-step" value="5" min="1" max="100">
             </div>
             <div class="form-group">
-                <button type="button" id="train-btn" style="margin-right:15px;">仅训练</button>
-                <button type="button" id="predict-btn" style="background-color:#52c41a;">预测</button>
+                <button type="button" id="train-btn" style="margin-right:15px;">仅训练模型</button>
+                <button type="button" id="predict-btn" style="background-color:#52c41a;">训练并预测</button>
             </div>
             <div class="result-section" style="margin-top:30px;border-top:1px solid #eee;padding-top:20px;">
                 <h3>分析结果</h3>
@@ -105,11 +112,19 @@
                     <div style="height:400px;"><canvas id="reliability-chart"></canvas></div>
                     <div style="height:400px;"><canvas id="failure-chart"></canvas></div>
                 </div>
+
+                <!-- 新增后五个失效时间显示区域 -->
+                <div id="last-failures-section" style="margin-top: 20px; background: #f0f8ff; padding: 15px; border-radius: 4px; display: none;">
+                    <h4>最近五次失效时间</h4>
+                    <div id="last-failures-content"></div>
+                </div>
+
                 <div id="result-data" style="margin-top:20px;background:#f9f9f9;padding:20px;border-radius:4px;"></div>
             </div>
         </div>
     </div>
 </div>
+
 <script>
     // 原始 JavaScript 逻辑 (与 GO 模型原始文件一致)
     let reliabilityChart;
@@ -121,68 +136,322 @@
     const DATASETS = {
         'default': [9,12,11,4,7,2,5,8,5,7,1,6,1,9,4,1,3,8,6,1,1,33,7,91,2,1,87,47,12,9,135,258,16,35],
         'dataset1': [2, 4, 6, 8, 11, 14, 17, 21, 26, 32, 39, 47, 56, 66, 77, 89],
-        'dataset2': [3, 5, 7, 9, 12, 15, 18, 22, 27, 33, 40, 48, 57, 67, 78]
+        'dataset2': [3, 5, 7, 9, 12, 15, 18, 22, 27, 33, 40, 48, 57, 67, 78],
+        'dataset3': [9, 21, 32, 36, 43, 45, 50, 58, 63, 70, 71, 77, 78, 87, 91, 92, 95, 98, 104, 105, 116, 149, 156, 247, 249, 250,
+        337, 384, 396, 405, 540, 798, 814, 849]
     };
+
     function initCharts() {
         const reliabilityCtx = document.getElementById('reliability-chart').getContext('2d');
         reliabilityChart = new Chart(reliabilityCtx, { type: 'line', data: { labels: [], datasets: [{ label: 'Reliability', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, min: 0, max: 1 }, x: { title: { display: true, text: 'Time' } } } } });
         const failureCtx = document.getElementById('failure-chart').getContext('2d');
         failureChart = new Chart(failureCtx, { type: 'scatter', data: { datasets: [{ label: 'Historical Failures', data: [], backgroundColor: 'rgba(75, 192, 192, 0.5)' }, { label: 'Predicted Failures', data: [], backgroundColor: 'rgba(255, 99, 132, 0.5)' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Failure Sequence' } }, y: { title: { display: true, text: 'Time' } } } } });
     }
+
     function updateCharts(reliabilityData, historicalFailures, predictedFailures) {
         if (reliabilityData && reliabilityData.length > 0) { reliabilityChart.data.labels = reliabilityData.map(point => point.time); reliabilityChart.data.datasets[0].data = reliabilityData.map(point => point.reliability); reliabilityChart.update(); }
         if (historicalFailures && historicalFailures.length > 0) { const historicalData = historicalFailures.map((time, index) => ({ x: index + 1, y: time })); const predictedData = predictedFailures ? predictedFailures.map((time, index) => ({ x: index + 1 + historicalFailures.length, y: time })) : []; failureChart.data.datasets[0].data = historicalData; failureChart.data.datasets[1].data = predictedData; failureChart.update(); }
     }
-    function showMessage(message, type = 'info') { const messageArea = document.getElementById('message-area'); messageArea.innerHTML = ''; const messageDiv = document.createElement('div'); messageDiv.className = type; messageDiv.innerHTML = `<strong>${type}:</strong> ${message}`; messageArea.appendChild(messageDiv); if (type !== 'error') setTimeout(() => { messageDiv.remove(); }, 3000); }
+
+    function showMessage(message, type = 'info') {
+        const messageArea = document.getElementById('message-area');
+        messageArea.innerHTML = '';
+        const messageDiv = document.createElement('div');
+        messageDiv.className = type;
+        messageDiv.innerHTML = `<strong>${type === 'error' ? '错误' : type === 'warning' ? '警告' : '成功'}:</strong> ${message}`;
+        messageArea.appendChild(messageDiv);
+        if (type !== 'error') setTimeout(() => { messageDiv.remove(); }, 3000);
+    }
+
+    // 数字格式化，控制显示位数，避免溢出
+    function formatNum(value, digits = 6) {
+        const n = Number(value);
+        if (Number.isNaN(n)) return '-';
+        return Number(n.toFixed(digits)).toString();
+    }
+
+    function formatPct(value, digits = 3) {
+        const n = Number(value);
+        if (Number.isNaN(n)) return '-';
+        return `${formatNum(n, digits)}%`;
+    }
+
     function parseCustomDataset() {
         const input = document.getElementById('train-data-input').value.trim();
         if (!input) { showMessage("请输入失效时间数据", 'error'); return null; }
         try { const numbers = input.split(',').map(item => item.trim()).filter(item => item.length > 0).map(item => { const num = parseFloat(item); if (isNaN(num) || num <= 0) throw new Error(`无效: ${item}`); return num; }); if (numbers.length < 2) throw new Error("需至少2个点"); return numbers; } catch (error) { showMessage(error.message, 'error'); return null; }
     }
-    function splitTrainTestData(dataset, ratio) { const splitIndex = Math.floor(dataset.length * ratio / 100); return { train: dataset.slice(0, splitIndex), test: dataset.slice(splitIndex) }; }
-    function updateDatasetPreview(dataset) { const preview = document.getElementById('dataset-preview'); if (dataset.length > 0) preview.innerHTML = `<strong>预览:</strong> [${dataset.slice(0, 10).join(', ')}${dataset.length > 10 ? ', ...' : ''}] (共 ${dataset.length} 个)`; else preview.innerHTML = ''; }
-    function loadDataset(datasetName) {
-        try { let dataset; if (datasetName === 'custom') { dataset = parseCustomDataset(); if (!dataset) return false; } else if (datasetName in DATASETS) { dataset = DATASETS[datasetName]; } else { showMessage(`未知数据集`, 'error'); return false; } currentDataset = dataset; if (datasetName === 'custom') { const ratio = parseInt(document.getElementById('train-ratio-slider').value); const splitResult = splitTrainTestData(dataset, ratio); trainData = splitResult.train; testData = splitResult.test; showMessage(`自定义加载成功`, 'success'); } else { trainData = dataset; testData = []; showMessage(`加载成功`, 'success'); } updateDatasetPreview(dataset); modelTrained = false; return true; } catch (error) { showMessage(`失败: ${error.message}`, 'error'); return false; }
+
+    // 拉取云端数据列表，填充下拉框
+    function fetchDatasetList() {
+        fetch('/api/data/list')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('dataset-select');
+                let group = document.getElementById('cloud-datasets-group');
+                if (!group) {
+                    group = document.createElement('optgroup');
+                    group.id = 'cloud-datasets-group';
+                    group.label = '我的云端数据';
+                    select.appendChild(group);
+                }
+                group.innerHTML = '';
+                data.data.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = `db:${item.id}`;
+                    opt.textContent = `[云端] ${item.name} (${item.count}点)`;
+                    group.appendChild(opt);
+                });
+            }
+        })
+        .catch(() => {});
     }
+
+    function splitTrainTestData(dataset, ratio) {
+        const splitIndex = Math.floor(dataset.length * ratio / 100);
+        return { train: dataset.slice(0, splitIndex), test: dataset.slice(splitIndex) };
+    }
+
+    function updateDatasetPreview(dataset) {
+        const preview = document.getElementById('dataset-preview');
+        if (dataset.length > 0) preview.innerHTML = `<strong>预览:</strong> [${dataset.slice(0, 10).join(', ')}${dataset.length > 10 ? ', ...' : ''}] (共 ${dataset.length} 个)`;
+        else preview.innerHTML = '';
+    }
+
+    function updateLastFailuresDisplay() {
+        const section = document.getElementById('last-failures-section');
+        const content = document.getElementById('last-failures-content');
+
+        if (trainData.length >= 5) {
+            const lastFive = trainData.slice(-5);
+            const avgInterval = lastFive.slice(1).map((val, idx) => val - lastFive[idx]).reduce((a, b) => a + b, 0) / 4;
+
+            content.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 10px 0;">
+                    ${lastFive.map((time, idx) => `
+                        <div style="text-align: center; padding: 10px; background: white; border-radius: 4px; border: 1px solid #ddd;">
+                            <div style="font-size: 18px; font-weight: bold; color: var(--primary-color);">${time.toFixed(1)}</div>
+                            <div style="font-size: 12px; color: #666;">第${trainData.length - 4 + idx}次</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                    <strong>平均间隔:</strong> ${avgInterval.toFixed(2)} |
+                    <strong>趋势:</strong> ${lastFive[4] > lastFive[0] ? '⬆️ 递增' : '⬇️ 递减'}
+                </p>
+            `;
+            section.style.display = 'block';
+        } else {
+            section.style.display = 'none';
+        }
+    }
+
+    function loadDataset(datasetName) {
+        try {
+            let dataset;
+            // 处理云端数据
+            if (datasetName && datasetName.startsWith('db:')) {
+                const id = datasetName.split(':')[1];
+                fetch(`/api/data/get/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        currentDataset = data.data || [];
+                        const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+                        const splitResult = splitTrainTestData(currentDataset, ratio);
+                        trainData = splitResult.train;
+                        testData = splitResult.test;
+                        showMessage(`云端数据加载成功 (共${currentDataset.length}条)`, 'success');
+                        updateDatasetPreview(currentDataset);
+                        updateLastFailuresDisplay();
+                        modelTrained = false;
+                    } else {
+                        showMessage('加载失败: ' + data.error, 'error');
+                    }
+                })
+                .catch(() => showMessage('网络错误', 'error'));
+                return true;
+            }
+
+            if (datasetName === 'custom') {
+                dataset = parseCustomDataset();
+                if (!dataset) return false;
+            } else if (datasetName in DATASETS) {
+                dataset = DATASETS[datasetName];
+            } else {
+                showMessage(`未知数据集`, 'error');
+                return false;
+            }
+            currentDataset = dataset;
+
+            // 应用训练数据比例分割
+            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+            const splitResult = splitTrainTestData(dataset, ratio);
+            trainData = splitResult.train;
+            testData = splitResult.test;
+
+            if (datasetName === 'custom') {
+                showMessage(`自定义加载成功 (训练集: ${trainData.length}, 测试集: ${testData.length})`, 'success');
+            } else {
+                showMessage(`加载成功 (训练集: ${trainData.length}, 测试集: ${testData.length})`, 'success');
+            }
+
+            updateDatasetPreview(dataset);
+            updateLastFailuresDisplay(); // 新增：显示最近五次失效
+            modelTrained = false;
+            return true;
+        } catch (error) {
+            showMessage(`失败: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    function reloadCurrentDatasetSplit() {
+        const select = document.getElementById('dataset-select');
+        if (select.value !== 'custom') {
+            loadDataset(select.value);
+        } else {
+            loadDataset('custom');
+        }
+    }
+
     function trainModel() {
         if (trainData.length === 0) { showMessage("请先加载数据", 'error'); return; }
-        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
+        const loadingSpinner = document.getElementById('loading-spinner');
+        loadingSpinner.style.display = 'flex';
         fetch('/api/go/train', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify({ train_data: trainData }), })
-        .then(res => { if (window.GlobalLoading) { GlobalLoading.hide(); } if(!res.ok) throw new Error(res.status); return res.json(); })
-        .then(data => { if(data.success) { modelTrained = true; showMessage("训练成功", 'success'); if(data.a && data.b) document.getElementById('result-data').innerHTML = `<h4>结果</h4><p>a=${data.a}, b=${data.b}</p>`; } else throw new Error(data.error); })
-        .catch(err => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`失败: ${err.message}`, 'error'); });
+        .then(res => {
+            loadingSpinner.style.display = 'none';
+            if(!res.ok) throw new Error(res.status);
+            return res.json();
+        })
+        .then(data => {
+            if(data.success) {
+                modelTrained = true;
+                showMessage("训练成功", 'success');
+                if(data.a && data.b) {
+                    document.getElementById('result-data').innerHTML = `<h4>结果</h4><p>a=${data.a}, b=${data.b}</p>`;
+                }
+            } else throw new Error(data.error);
+        })
+        .catch(err => {
+            loadingSpinner.style.display = 'none';
+            showMessage(`失败: ${err.message}`, 'error');
+        });
     }
+
     function performPrediction() {
-        if (!modelTrained) { showMessage("请先训练", 'error'); return; }
-        if (window.GlobalLoading) { GlobalLoading.showDelayed(); }
-        const formData = { data_type: document.getElementById('dataset-select').value, prediction_step: parseInt(document.getElementById('prediction-step').value), train_data: trainData, test_data: testData };
+        if (trainData.length === 0) { showMessage("请先加载数据", 'error'); return; }
+        const loadingSpinner = document.getElementById('loading-spinner');
+        loadingSpinner.style.display = 'flex';
+        const formData = {
+            data_type: document.getElementById('dataset-select').value,
+            prediction_step: parseInt(document.getElementById('prediction-step').value),
+            train_data: trainData,
+            test_data: testData
+        };
         fetch('/api/go/predict', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify(formData), })
-        .then(res => { if (window.GlobalLoading) { GlobalLoading.hide(); } return res.json(); })
-        .then(data => { if(data.success) { showMessage("预测成功", 'success'); updatePredictionResults(data); } else throw new Error(data.error); })
-        .catch(err => { if (window.GlobalLoading) { GlobalLoading.hide(); } showMessage(`失败: ${err.message}`, 'error'); });
+        .then(res => {
+            loadingSpinner.style.display = 'none';
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            return res.json();
+        })
+        .then(data => {
+            if(data.success) {
+                showMessage("预测成功", 'success');
+                updatePredictionResults(data);
+            } else throw new Error(data.error);
+        })
+        .catch(err => {
+            loadingSpinner.style.display = 'none';
+            showMessage(`失败: ${err.message}`, 'error');
+        });
     }
+
     function updatePredictionResults(data) {
         document.getElementById('accuracy-metrics').style.display = 'grid';
-        document.getElementById('mae-value').textContent = data.mae || '-'; document.getElementById('mse-value').textContent = data.mse || '-'; document.getElementById('rmse-value').textContent = data.rmse || '-'; document.getElementById('r2-value').textContent = data.r2_score || '-'; document.getElementById('accuracy-value').textContent = data.accuracy + '%' || '-';
-        document.getElementById('result-data').innerHTML = `<h4>预测结果</h4><p>a=${data.a}, b=${data.b}</p><p>剩余故障: ${data.remaining_faults}</p>`;
-        updateCharts(data.reliability_curve, data.historical_failures || trainData, data.predicted_intervals);
+        document.getElementById('mae-value').textContent = formatNum(data.mae, 6);
+        document.getElementById('mse-value').textContent = formatNum(data.mse, 6);
+        document.getElementById('rmse-value').textContent = formatNum(data.rmse, 6);
+        document.getElementById('r2-value').textContent = formatNum(data.r2_score, 6);
+        document.getElementById('accuracy-value').textContent = formatPct(data.accuracy, 3);
+
+        // 新增：显示后五个失效时间预测
+        let predictionHtml = `<h4>预测结果</h4><p>a=${data.a}, b=${data.b}</p><p>剩余故障: ${data.remaining_faults}</p>`;
+
+        // 显示预测类型
+        if (data.prediction_type === 'test_data') {
+        predictionHtml += `<p style="color: #52c41a;"><strong>✓ 使用测试数据进行验证预测</strong></p>`;
+        } else {
+        predictionHtml += `<p style="color: #faad14;"><strong>⚠ 使用模型进行数值预测</strong></p>`;
+        }
+
+        if (data.cumulative_times && data.cumulative_times.length > 0) {
+        predictionHtml += `<h5>未来失效时间预测:</h5><table style="width:100%;border-collapse:collapse;">`;
+        predictionHtml += `<tr><th style="border:1px solid #ddd;padding:8px;">序号</th><th style="border:1px solid #ddd;padding:8px;">预测时间</th><th style="border:1px solid #ddd;padding:8px;">时间间隔</th></tr>`;
+
+        for (let i = 0; i < data.cumulative_times.length; i++) {
+            predictionHtml += `<tr>
+                <td style="border:1px solid #ddd;padding:8px;">${trainData.length + i + 1}</td>
+                <td style="border:1px solid #ddd;padding:8px;">${data.cumulative_times[i].toFixed(2)}</td>
+                <td style="border:1px solid #ddd;padding:8px;">${data.predicted_intervals[i].toFixed(2)}</td>
+            </tr>`;
+        }
+        predictionHtml += `</table>`;
+
+        // 显示真实值对比（如果有测试数据）
+        if (testData.length > 0 ) {
+            predictionHtml += `<h5 style="margin-top:20px;">与真实值对比:</h5><table style="width:100%;border-collapse:collapse;">`;
+            predictionHtml += `<tr><th style="border:1px solid #ddd;padding:8px;">序号</th><th style="border:1px solid #ddd;padding:8px;">预测时间</th><th style="border:1px solid #ddd;padding:8px;">真实时间</th><th style="border:1px solid #ddd;padding:8px;">误差</th></tr>`;
+
+            for (let i = 0; i < Math.min(data.cumulative_times.length,testData.length); i++) {
+                const error = data.cumulative_times[i] - testData[i];
+                predictionHtml += `<tr>
+                    <td style="border:1px solid #ddd;padding:8px;">${trainData.length + i + 1}</td>
+                    <td style="border:1px solid #ddd;padding:8px;">${data.cumulative_times[i].toFixed(2)}</td>
+                    <td style="border:1px solid #ddd;padding:8px;">${testData[i].toFixed(2)}</td>
+                    <td style="border:1px solid #ddd;padding:8px;color:${error === 0 ? 'green' : 'red'}">${error.toFixed(2)}</td>
+                </tr>`;
+            }
+            predictionHtml += `</table>`;
+        }
     }
+
+        document.getElementById('result-data').innerHTML = predictionHtml;
+
+        updateCharts(data.reliability_curve, data.historical_failures || trainData, data.cumulative_times);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         initCharts();
-        document.getElementById('dataset-select').addEventListener('change', function() { if(this.value==='custom') document.getElementById('custom-dataset-group').style.display='block'; else { document.getElementById('custom-dataset-group').style.display='none'; loadDataset(this.value); } });
-        document.getElementById('train-ratio-slider').addEventListener('input', function() { document.getElementById('train-ratio-value').textContent = this.value+'%'; });
+        document.getElementById('dataset-select').addEventListener('change', function() {
+            if(this.value==='custom') {
+                document.getElementById('custom-dataset-group').style.display='block';
+            } else {
+                document.getElementById('custom-dataset-group').style.display='none';
+                loadDataset(this.value);
+            }
+        });
+        document.getElementById('train-ratio-slider').addEventListener('input', function() {
+            document.getElementById('train-ratio-value').textContent = this.value+'%';
+            reloadCurrentDatasetSplit(); // 实时更新数据分割
+        });
         document.getElementById('load-dataset-btn').addEventListener('click', () => loadDataset('custom'));
         document.getElementById('train-btn').addEventListener('click', trainModel);
         document.getElementById('predict-btn').addEventListener('click', performPrediction);
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', function() {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); this.classList.add('active');
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
                 const map = {'模型简介':'model-intro-content','失效数据':'dataset-content','预测分析':'prediction-content'};
                 Object.values(map).forEach(id => document.getElementById(id).style.display='none');
                 document.getElementById(map[this.textContent.trim()]).style.display='block';
             });
         });
-        document.querySelectorAll('.tab')[0].click(); loadDataset('default');
+        document.querySelectorAll('.tab')[0].click();
+        loadDataset('default');
+        fetchDatasetList();
     });
 </script>
 {% endblock %}
