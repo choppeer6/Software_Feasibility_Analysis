@@ -82,8 +82,12 @@
                         <input type="number" id="look-back" name="look-back" value="5" min="1" max="20">
                     </div>
                     <div class="form-group">
-                        <label for="hidden-size">隐含层神经元数:</label>
+                        <label for="hidden-size">网络规模参数:</label>
                         <input type="number" id="hidden-size" name="hidden-size" value="10" min="1" max="50">
+                        <small style="display: block; color: #666; margin-top: 4px;">
+                            实际网络结构：第一层隐含层 = 参数×10，第二层隐含层 = 第一层×60%<br>
+                            例如：参数=10 → 第一层100个神经元，第二层60个神经元
+                        </small>
                     </div>
                     <div class="form-group">
                         <label for="lr">学习率 (lr):</label>
@@ -91,7 +95,7 @@
                     </div>
                     <div class="form-group">
                         <label for="epochs">训练轮数 (epochs):</label>
-                        <input type="number" id="epochs" name="epochs" value="1500" min="10" max="10000">
+                        <input type="number" id="epochs" name="epochs" value="500" min="10" max="10000">
                     </div>
                 </div>
                 

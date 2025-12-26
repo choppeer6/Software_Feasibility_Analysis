@@ -21,8 +21,6 @@ from model.jm_model_prediction import (
 from model.go_model_prediction import (
     go_model_parameter_estimation,
     go_predict_future_failures,
-    # go_calculate_model_accuracy
-    # plot_prediction_results as go_plot_prediction_results,
     calculate_reliability as go_calculate_reliability,
     calculate_model_accuracy as go_calculate_model_accuracy
 )
@@ -969,7 +967,7 @@ def bp_model():
             look_back = int(request.form.get('look_back', 5))
             hidden_size = int(request.form.get('hidden_size', 10))
             lr = float(request.form.get('lr', 0.05))
-            epochs = int(request.form.get('epochs', 1500))
+            epochs = int(request.form.get('epochs', 500))  # 降低默认训练轮数
 
             # 获取合适的失效数据
             if data_type == 'id':
@@ -1054,7 +1052,7 @@ def api_bp_train():
         look_back = data.get('look_back', 5)
         hidden_size = data.get('hidden_size', 10)
         lr = data.get('lr', 0.05)
-        epochs = data.get('epochs', 1500)
+        epochs = data.get('epochs', 500)  # 降低默认训练轮数，加快训练速度
 
         if not train_data or not isinstance(train_data, list) or len(train_data) < 6:
             return jsonify({'success': False, 'error': f'请提供至少{look_back + 1}个失效时间点作为训练数据'}), 400
@@ -1140,7 +1138,7 @@ def api_bp_predict():
         look_back = data.get('look_back', 5)
         hidden_size = data.get('hidden_size', 10)
         lr = data.get('lr', 0.05)
-        epochs = data.get('epochs', 1500)
+        epochs = data.get('epochs', 500)  # 降低默认训练轮数，加快训练速度
 
         # 参数验证
         try:
@@ -1867,7 +1865,7 @@ def api_model_compare():
                 look_back = int(data.get('bp_look_back', 5))
                 hidden_size = int(data.get('bp_hidden_size', 10))
                 lr = float(data.get('bp_lr', 0.05))
-                epochs = int(data.get('bp_epochs', 1500))
+                epochs = int(data.get('bp_epochs', 500))  # 降低默认训练轮数
                 bp_model_inst, _, _, _ = bp_train_model(
                     train_series, look_back=look_back,
                     hidden_size=hidden_size, lr=lr, epochs=epochs, verbose=False

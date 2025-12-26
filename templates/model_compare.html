@@ -303,13 +303,13 @@
                 models: models
             })
         })
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success) throw new Error(data.error || '对比失败');
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) throw new Error(data.error || '对比失败');
                 renderMetrics(data.results || {});
-                showMessage(`对比完成，使用数据点 ${data.used_train_count} 个`, 'success');
-            })
-            .catch(err => showMessage(err.message, 'error'));
+            showMessage(`对比完成，使用数据点 ${data.used_train_count} 个`, 'success');
+        })
+        .catch(err => showMessage(err.message, 'error'));
     });
 
     datasetSelect.addEventListener('change', () => {
