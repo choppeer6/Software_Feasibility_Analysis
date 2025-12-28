@@ -48,14 +48,11 @@
             </select>
             <label for="train-data-input">若选择自定义，请输入失效时间数据（逗号分隔）</label>
             <textarea id="train-data-input" rows="4" style="width:100%;resize:vertical;" placeholder="例如：9,21,32,36,43,45,50,58,63,70" disabled></textarea>
-        </div>
+            <label for="train-ratio-slider" style="margin-top:12px; display:block;">训练数据比例: <span id="train-ratio-value">77</span>%</label>
+            <input type="range" id="train-ratio-slider" min="50" max="95" value="77" step="1" style="width:100%;">
+            <div id="dataset-preview" style="margin-top:12px; padding:8px; background:#f9f9f9; border:1px dashed #ddd; border-radius:4px; font-size:12px; color:#666;"></div>
+            image.png        </div>
         <div>
-            <label for="data-type-select">数据类型</label>
-            <select id="data-type-select" style="width:100%; margin-bottom:8px;">
-                <option value="interval" selected>失效时间间隔序列</option>
-                <option value="cumulative">累计失效时间点序列</option>
-            </select>
-            <small style="color:#999; display:block; margin-bottom:8px;">若选择累计时间，将自动转换为间隔序列再训练</small>
             <button id="compare-btn" style="width:100%;">开始训练对比</button>
             <div id="message-area" style="margin-top:8px;"></div>
         </div>
@@ -242,12 +239,118 @@
         return nums;
     }
 
+    let currentDataset = [];
+    let trainData = [];
+    let testData = [];
+
+    function splitTrainTestData(dataset, ratio) {
+        const splitIndex = Math.floor(dataset.length * ratio / 100);
+        return { train: dataset.slice(0, splitIndex), test: dataset.slice(splitIndex) };
+    }
+
+    function updateDatasetPreview(dataset) {
+        const preview = document.getElementById('dataset-preview');
+        if (dataset.length > 0) {
+            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+            const splitResult = splitTrainTestData(dataset, ratio);
+            preview.innerHTML = `<strong>数据集预览:</strong> [${dataset.slice(0, 10).join(', ')}${dataset.length > 10 ? ', ...' : ''}] (共 ${dataset.length} 个数据点)<br><span style="color:green; font-size:0.9em;">(前 ${splitResult.train.length} 个用于训练，后 ${splitResult.test.length} 个用于验证)</span>`;
+        } else {
+            preview.innerHTML = '';
+        }
+    }
+
+    function loadDataset(datasetName) {
+        try {
+            let dataset;
+            // 处理云端数据
+            if (datasetName && datasetName.startsWith('cloud_')) {
+                const id = datasetName.replace('cloud_', '');
+                fetch(`/api/data/list`)
+                    .then(res => {
+                        if (!res.ok) {
+                            throw new Error('请求失败');
+                        }
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            const found = data.data.find(d => d.filename.includes(id));
+                            if (found) {
+                                fetch(`/api/data/get/${found.id}`)
+                                    .then(res => {
+                                        if (!res.ok) {
+                                            throw new Error('请求失败');
+                                        }
+                                        return res.json();
+                                    })
+                                    .then(data => {
+                                        if (data.success) {
+                                            currentDataset = data.data || [];
+                                            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+                                            const splitResult = splitTrainTestData(currentDataset, ratio);
+                                            trainData = splitResult.train;
+                                            testData = splitResult.test;
+                                            updateDatasetPreview(currentDataset);
+                                            showMessage(`云端数据加载成功 (共${currentDataset.length}条)`, 'success');
+                                        } else {
+                                            // 静默处理加载失败，不显示错误
+                                        }
+                                    })
+                                    .catch(() => {}); // 静默处理所有错误
+                            } else {
+                                // 静默处理未找到数据集
+                            }
+                        }
+                    })
+                    .catch(() => {}); // 静默处理所有错误
+                return true;
+            }
+
+            // 处理预定义数据集
+            const DATASETS = {
+                default: [9, 12, 11, 4, 7, 2, 5, 8, 5, 7, 1, 6, 2, 5, 10, 4, 2, 5, 1, 6, 3, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                testset1: [9, 12, 11, 4, 7, 2, 5, 8, 5, 7, 1, 6, 2, 5, 10, 4, 2, 5, 1, 6, 3, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                project: [9, 12, 11, 4, 7, 2, 5, 8, 5, 7, 1, 6, 2, 5, 10, 4, 2, 5, 1, 6, 3, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                go: [9, 12, 11, 4, 7, 2, 5, 8, 5, 7, 1, 6, 2, 5, 10, 4, 2, 5, 1, 6, 3, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            };
+
+            if (datasetName === 'custom') {
+                dataset = parseInputData(true);
+                if (!dataset) return false;
+            } else if (datasetName in DATASETS) {
+                dataset = DATASETS[datasetName];
+            } else {
+                return false;
+            }
+
+            currentDataset = dataset;
+            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+            const splitResult = splitTrainTestData(dataset, ratio);
+            trainData = splitResult.train;
+            testData = splitResult.test;
+            updateDatasetPreview(dataset);
+            return true;
+        } catch (error) {
+            showMessage(`加载数据集失败: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
     function getTrainData() {
         const key = datasetSelect.value;
         if (key === 'custom') {
-            return parseInputData(true);
+            const dataset = parseInputData(true);
+            if (!dataset) return null;
+            currentDataset = dataset;
+            const ratio = parseInt(document.getElementById('train-ratio-slider').value);
+            const splitResult = splitTrainTestData(dataset, ratio);
+            trainData = splitResult.train;
+            testData = splitResult.test;
+            updateDatasetPreview(dataset);
+            return trainData;
         }
-        // 非自定义时不在前端生成伪数据，交给后端按数据集名称读取，确保与单模型预测一致
+        // 非自定义数据集时，不发送train_data，让后端根据dataset_name加载
+        // 这样可以确保每次都是最新的数据
         return null;
     }
 
@@ -276,10 +379,15 @@
     }
 
     document.getElementById('compare-btn').addEventListener('click', () => {
-        let trainData = null;
+        let trainDataToSend = null;
+        let testDataToSend = null;
         const datasetName = datasetSelect.value === 'custom' ? null : datasetSelect.value;
         try {
-            trainData = getTrainData();
+            trainDataToSend = getTrainData();
+            // 如果是自定义数据集，也发送test_data
+            if (datasetSelect.value === 'custom' && testData.length > 0) {
+                testDataToSend = testData;
+            }
         } catch (e) {
             showMessage(e.message, 'error');
             return;
@@ -293,21 +401,33 @@
 
         showMessage('正在对比，请稍候...', 'info');
 
+        const requestData = {
+            train_data: trainDataToSend,
+            dataset_name: datasetName,
+            train_ratio: parseInt(document.getElementById('train-ratio-slider').value),
+            models: models
+        };
+        // 只有在自定义数据集时才发送test_data（因为后端会根据dataset_name和train_ratio自动划分）
+        if (datasetSelect.value === 'custom' && testDataToSend && testDataToSend.length > 0) {
+            requestData.test_data = testDataToSend;
+        }
+
         fetch('/api/model/compare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                train_data: trainData,
-                dataset_name: datasetName,
-                data_type: document.getElementById('data-type-select').value,
-                models: models
-            })
+            body: JSON.stringify(requestData)
         })
         .then(res => res.json())
         .then(data => {
             if (!data.success) throw new Error(data.error || '对比失败');
                 renderMetrics(data.results || {});
-            showMessage(`对比完成，使用数据点 ${data.used_train_count} 个`, 'success');
+            const trainCount = data.used_train_count || 0;
+            const testCount = data.used_test_count || 0;
+            if (testCount > 0) {
+                showMessage(`对比完成，训练集 ${trainCount} 个，验证集 ${testCount} 个`, 'success');
+            } else {
+                showMessage(`对比完成，使用数据点 ${trainCount} 个`, 'success');
+            }
         })
         .catch(err => showMessage(err.message, 'error'));
     });
@@ -315,11 +435,29 @@
     datasetSelect.addEventListener('change', () => {
         const isCustom = datasetSelect.value === 'custom';
         trainTextarea.disabled = !isCustom;
+        // 切换数据集时，清空旧数据，确保使用新数据
+        currentDataset = [];
+        trainData = [];
+        testData = [];
         if (!isCustom) {
             trainTextarea.value = '';
             trainTextarea.placeholder = '已选固定数据集，前端不生成样例，后端按名称读取';
+            loadDataset(datasetSelect.value);
         } else {
             trainTextarea.placeholder = '例如：9,21,32,36,43,45,50,58,63,70';
+            updateDatasetPreview([]);
+        }
+    });
+
+    // 训练数据比例滑块事件
+    document.getElementById('train-ratio-slider').addEventListener('input', (e) => {
+        document.getElementById('train-ratio-value').textContent = e.target.value;
+        if (currentDataset.length > 0) {
+            const ratio = parseInt(e.target.value);
+            const splitResult = splitTrainTestData(currentDataset, ratio);
+            trainData = splitResult.train;
+            testData = splitResult.test;
+            updateDatasetPreview(currentDataset);
         }
     });
 

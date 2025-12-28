@@ -360,7 +360,25 @@
             const ex = parseFloat(document.getElementById('ex').value);
             const ey = parseFloat(document.getElementById('ey').value);
             if (isNaN(predictionStep) || predictionStep < 1 || predictionStep > 100) throw new Error("预测步长必须是1-100之间的整数");
-            const formData = { data_type: document.getElementById('dataset-select').value, prediction_step: predictionStep, ex: ex, ey: ey, train_data: trainData, test_data: testData };
+            const datasetSelect = document.getElementById('dataset-select');
+            const datasetValue = datasetSelect.value;
+            // 如果是自定义数据集，dataset_name为null；否则使用数据集名称
+            const datasetName = datasetValue === 'custom' ? null : datasetValue;
+            const trainRatio = parseInt(document.getElementById('train-ratio-slider').value);
+            // 单个模型页面默认使用interval类型，除非有数据类型选择器
+            const dataTypeSelect = document.getElementById('data-type-select');
+            const dataType = dataTypeSelect ? dataTypeSelect.value : 'interval';
+            
+            const formData = { 
+                dataset_name: datasetName,
+                train_ratio: trainRatio,
+                data_type: dataType,
+                prediction_step: predictionStep, 
+                ex: ex, 
+                ey: ey, 
+                train_data: trainData, 
+                test_data: testData 
+            };
             fetch('/api/jm/predict', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', },

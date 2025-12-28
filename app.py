@@ -510,7 +510,7 @@ def api_jm_predict():
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
 
         # 获取并验证参数
-        data_type = data.get('data_type', 'id')
+        data_type = data.get('data_type', 'interval')  # 默认为interval，与模型对比分析保持一致
         prediction_step = data.get('prediction_step', 5)
         ex = data.get('ex', 0.001)
         ey = data.get('ey', 0.001)
@@ -532,17 +532,57 @@ def api_jm_predict():
         if ey < 0 or ey > 1:
             return jsonify({'success': False, 'error': '预测精度ey必须在0-1之间'}), 400
 
-        # 优先使用请求中提供的 train_data（用于前百分比训练或自定义数据）
+        # 获取数据集名称和训练数据比例（与模型对比分析保持一致）
+        dataset_name = data.get('dataset_name')
+        train_ratio = data.get('train_ratio', 77)
+        
+        # 获取训练和测试数据
         train_data = data.get('train_data')
         test_data = data.get('test_data')
-        if train_data and isinstance(train_data, list) and len(train_data) >= 2:
-            failure_data = train_data
+        
+        # 如果提供了数据集名称，从数据库加载数据（与模型对比分析保持一致）
+        if dataset_name and not train_data:
+            try:
+                datasets = Dataset.query.filter_by(user_id=session.get('username', '')).all()
+                found = None
+                for ds in datasets:
+                    if dataset_name in ds.filename or ds.filename in dataset_name:
+                        found = ds
+                        break
+                if found:
+                    content = json.loads(found.content) if isinstance(found.content, str) else found.content
+                    if isinstance(content, list) and len(content) > 0:
+                        full_data = [float(x) for x in content]
+                        # 按比例划分
+                        split_idx = int(len(full_data) * train_ratio / 100)
+                        train_data = full_data[:split_idx]
+                        test_data = full_data[split_idx:] if split_idx < len(full_data) else []
+                else:
+                    # 如果找不到，使用默认数据
+                    train_data = SAMPLE_FAILURE_DATA
+            except Exception:
+                train_data = SAMPLE_FAILURE_DATA
+        
+        # 如果没有提供训练数据，使用默认数据
+        if not isinstance(train_data, list) or len(train_data) < 2:
+            train_data = SAMPLE_FAILURE_DATA
+        
+        # 处理数据类型转换（与模型对比分析保持一致）
+        try:
+            failure_data_raw = [float(x) for x in train_data]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '训练数据必须为数值列表'}), 400
+
+        # 如果选择的是累计失效时间点序列，转换为失效间隔序列
+        if data_type == 'cumulative':
+            if len(failure_data_raw) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [failure_data_raw[0]]
+            for i in range(1, len(failure_data_raw)):
+                diffs.append(failure_data_raw[i] - failure_data_raw[i-1])
+            failure_data = diffs
         else:
-            # 否则退回到样例数据或通过 data_type 选择
-            if data_type == 'id':
-                failure_data = SAMPLE_FAILURE_DATA
-            else:
-                failure_data = SAMPLE_FAILURE_DATA
+            failure_data = failure_data_raw
 
         # 执行JM模型预测
         try:
@@ -824,7 +864,7 @@ def api_go_predict():
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
 
         # 获取并验证参数
-        data_type = data.get('data_type', 'id')
+        data_type = data.get('data_type', 'interval')  # 默认为interval，与模型对比分析保持一致
         prediction_step = data.get('prediction_step', 5)
 
         # 参数验证
@@ -836,16 +876,57 @@ def api_go_predict():
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
 
-        # 优先使用请求中提供的 train_data
+        # 获取数据集名称和训练数据比例（与模型对比分析保持一致）
+        dataset_name = data.get('dataset_name')
+        train_ratio = data.get('train_ratio', 77)
+        
+        # 获取训练和测试数据
         train_data = data.get('train_data')
         test_data = data.get('test_data')
-        if train_data and isinstance(train_data, list) and len(train_data) >= 2:
-            failure_data = train_data
+        
+        # 如果提供了数据集名称，从数据库加载数据（与模型对比分析保持一致）
+        if dataset_name and not train_data:
+            try:
+                datasets = Dataset.query.filter_by(user_id=session.get('username', '')).all()
+                found = None
+                for ds in datasets:
+                    if dataset_name in ds.filename or ds.filename in dataset_name:
+                        found = ds
+                        break
+                if found:
+                    content = json.loads(found.content) if isinstance(found.content, str) else found.content
+                    if isinstance(content, list) and len(content) > 0:
+                        full_data = [float(x) for x in content]
+                        # 按比例划分
+                        split_idx = int(len(full_data) * train_ratio / 100)
+                        train_data = full_data[:split_idx]
+                        test_data = full_data[split_idx:] if split_idx < len(full_data) else []
+                else:
+                    # 如果找不到，使用默认数据
+                    train_data = SAMPLE_FAILURE_DATA
+            except Exception:
+                train_data = SAMPLE_FAILURE_DATA
+        
+        # 如果没有提供训练数据，使用默认数据
+        if not isinstance(train_data, list) or len(train_data) < 2:
+            train_data = SAMPLE_FAILURE_DATA
+        
+        # 处理数据类型转换（与模型对比分析保持一致）
+        try:
+            failure_data_raw = [float(x) for x in train_data]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '训练数据必须为数值列表'}), 400
+
+        # 如果选择的是累计失效时间点序列，转换为失效间隔序列
+        if data_type == 'cumulative':
+            if len(failure_data_raw) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [failure_data_raw[0]]
+            for i in range(1, len(failure_data_raw)):
+                diffs.append(failure_data_raw[i] - failure_data_raw[i-1])
+            failure_data = diffs
         else:
-            if data_type == 'id':
-                failure_data = SAMPLE_FAILURE_DATA
-            else:
-                failure_data = SAMPLE_FAILURE_DATA
+            failure_data = failure_data_raw
 
         # 执行GO模型预测
         try:
@@ -1133,7 +1214,7 @@ def api_bp_predict():
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
 
         # 获取并验证参数
-        data_type = data.get('data_type', 'id')
+        data_type = data.get('data_type', 'interval')  # 默认为interval，与模型对比分析保持一致
         prediction_step = data.get('prediction_step', 5)
         look_back = data.get('look_back', 5)
         hidden_size = data.get('hidden_size', 10)
@@ -1165,15 +1246,30 @@ def api_bp_predict():
         train_data = data.get('train_data')
         test_data = data.get('test_data')
         if train_data and isinstance(train_data, list) and len(train_data) >= look_back + 1:
-            failure_data = train_data
+            failure_data_raw = train_data
         else:
             if data_type == 'id':
-                failure_data = SAMPLE_FAILURE_DATA
+                failure_data_raw = SAMPLE_FAILURE_DATA
             else:
-                failure_data = SAMPLE_FAILURE_DATA
+                failure_data_raw = SAMPLE_FAILURE_DATA
             # 如果前端没有显式拆分测试集，则让后端自动划分验证集
             if not test_data:
                 test_data = None
+
+        # 处理数据类型转换（与模型对比分析保持一致）
+        try:
+            failure_data = [float(x) for x in failure_data_raw]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': '训练数据必须为数值列表'}), 400
+
+        # 如果选择的是累计失效时间点序列，转换为失效间隔序列
+        if data_type == 'cumulative':
+            if len(failure_data) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [failure_data[0]]
+            for i in range(1, len(failure_data)):
+                diffs.append(failure_data[i] - failure_data[i-1])
+            failure_data = diffs
 
         # 执行BP模型预测
         try:
@@ -1316,7 +1412,7 @@ def api_nhpp_predict():
         if not data:
             return jsonify({'success': False, 'error': '无效的JSON数据'}), 400
 
-        data_type = data.get('data_type', 'id')
+        data_type = data.get('data_type', 'interval')  # 默认为interval，与模型对比分析保持一致
         prediction_step = data.get('prediction_step', 5)
         model_type = data.get('model_type', 'exponential')
         failure_data = data.get('train_data')
@@ -1332,14 +1428,24 @@ def api_nhpp_predict():
         # 获取失效数据：优先使用前端提供的数据，否则使用示例数据
         if failure_data and isinstance(failure_data, list) and len(failure_data) >= 2:
             try:
-                failure_data = [float(x) for x in failure_data]
+                failure_data_raw = [float(x) for x in failure_data]
             except (ValueError, TypeError):
                 return jsonify({'success': False, 'error': '失效数据必须为数值类型'}), 400
         else:
             if data_type == 'id':
-                failure_data = SAMPLE_FAILURE_DATA
+                failure_data_raw = SAMPLE_FAILURE_DATA
             else:
-                failure_data = SAMPLE_FAILURE_DATA
+                failure_data_raw = SAMPLE_FAILURE_DATA
+
+        # 处理数据类型转换（与模型对比分析保持一致）
+        failure_data = failure_data_raw.copy()
+        if data_type == 'cumulative':
+            if len(failure_data) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [failure_data[0]]
+            for i in range(1, len(failure_data)):
+                diffs.append(failure_data[i] - failure_data[i-1])
+            failure_data = diffs
 
         try:
             params, used_model_type = nhpp_model_parameter_estimation(failure_data, model_type=model_type)
@@ -1463,6 +1569,7 @@ def api_arima_predict():
             import json
             data = json.loads(raw)
 
+        data_type = data.get('data_type', 'interval')
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
         order = data.get('order', [1, 1, 1])
@@ -1471,7 +1578,7 @@ def api_arima_predict():
             train_data = SAMPLE_FAILURE_DATA
 
         try:
-            train_data = [float(x) for x in train_data]
+            train_data_raw = [float(x) for x in train_data]
             prediction_step = int(prediction_step)
             order = tuple([int(x) for x in order]) if isinstance(order, list) else order
         except (ValueError, TypeError):
@@ -1479,6 +1586,16 @@ def api_arima_predict():
 
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
+
+        # 处理数据类型转换（与模型对比分析保持一致）
+        train_data = train_data_raw.copy()
+        if data_type == 'cumulative':
+            if len(train_data) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [train_data[0]]
+            for i in range(1, len(train_data)):
+                diffs.append(train_data[i] - train_data[i-1])
+            train_data = diffs
 
         model, _ = arima_train_model(train_data, order=order)
         prediction_results = arima_predict_future_failures(model, train_data, prediction_step)
@@ -1574,6 +1691,7 @@ def api_gm11_predict():
             import json
             data = json.loads(raw)
 
+        data_type = data.get('data_type', 'interval')
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
 
@@ -1583,13 +1701,23 @@ def api_gm11_predict():
                           3, 126, 123, 18, 19]
 
         try:
-            train_data = [float(x) for x in train_data]
+            train_data_raw = [float(x) for x in train_data]
             prediction_step = int(prediction_step)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '参数类型错误'}), 400
 
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
+
+        # 处理数据类型转换（与模型对比分析保持一致）
+        train_data = train_data_raw.copy()
+        if data_type == 'cumulative':
+            if len(train_data) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [train_data[0]]
+            for i in range(1, len(train_data)):
+                diffs.append(train_data[i] - train_data[i-1])
+            train_data = diffs
 
         # 训练模型并预测
         params = gm11_train_model(train_data)
@@ -1712,6 +1840,7 @@ def api_svr_predict():
             import json
             data = json.loads(raw)
 
+        data_type = data.get('data_type', 'interval')
         train_data = data.get('train_data')
         prediction_step = data.get('prediction_step', 5)
         # 与模型实现保持一致：默认 look_back = 8
@@ -1725,7 +1854,7 @@ def api_svr_predict():
             train_data = SAMPLE_FAILURE_DATA
         
         try:
-            train_data = [float(x) for x in train_data]
+            train_data_raw = [float(x) for x in train_data]
             prediction_step = int(prediction_step)
             look_back = int(look_back)
             C = float(C)
@@ -1735,6 +1864,16 @@ def api_svr_predict():
         
         if prediction_step < 1 or prediction_step > 100:
             return jsonify({'success': False, 'error': '预测步长必须在1-100之间'}), 400
+
+        # 处理数据类型转换（与模型对比分析保持一致）
+        train_data = train_data_raw.copy()
+        if data_type == 'cumulative':
+            if len(train_data) < 2:
+                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
+            diffs = [train_data[0]]
+            for i in range(1, len(train_data)):
+                diffs.append(train_data[i] - train_data[i-1])
+            train_data = diffs
         
         # 先根据训练数据重新训练一次模型，得到 t_min / t_max
         model, _, t_min, t_max = svr_train_model(
@@ -1796,23 +1935,144 @@ def api_model_compare():
             import json
             data = json.loads(raw)
 
+        # 获取数据集名称和训练数据比例
+        dataset_name = data.get('dataset_name')
+        train_ratio = data.get('train_ratio', 77)
+        
+        # 获取训练和测试数据
         train_data = data.get('train_data')
-        if not isinstance(train_data, list) or len(train_data) < 3:
-            train_data = SAMPLE_FAILURE_DATA
+        test_data = data.get('test_data')
+        
+        # 如果train_data为None或空列表，且提供了数据集名称，从数据库加载数据
+        # 使用与get_dataset_content相同的逻辑
+        if dataset_name and (train_data is None or (isinstance(train_data, list) and len(train_data) == 0)):
+            try:
+                # 处理云端数据（以cloud_开头）
+                if dataset_name.startswith('cloud_'):
+                    datasets = Dataset.query.filter_by(user_id=session.get('username', '')).all()
+                    found = None
+                    id_part = dataset_name.replace('cloud_', '').lower()
+                    
+                    # 简化匹配逻辑：匹配original_name或filename中包含id_part的数据集
+                    # 例如：cloud_jm1 应该匹配 jm_test_1.txt 或包含 jm 和 1 的文件
+                    for ds in datasets:
+                        orig_lower = ds.original_name.lower()
+                        filename_lower = ds.filename.lower()
+                        
+                        # 提取文件名中的关键部分（去掉扩展名）
+                        orig_key = orig_lower.rsplit('.', 1)[0] if '.' in orig_lower else orig_lower
+                        # 从filename中提取原始文件名部分（去掉用户名和时间戳前缀）
+                        filename_parts = filename_lower.split('_')
+                        if len(filename_parts) >= 3:
+                            # 格式：username_timestamp_originalname.ext
+                            filename_key = '_'.join(filename_parts[2:]).rsplit('.', 1)[0] if '.' in '_'.join(filename_parts[2:]) else '_'.join(filename_parts[2:])
+                        else:
+                            filename_key = filename_lower.rsplit('.', 1)[0] if '.' in filename_lower else filename_lower
+                        
+                        # 匹配：id_part的所有字符都应该在文件名中（顺序可以不同）
+                        # 例如：jm1 应该匹配包含 j, m, 1 的文件名
+                        id_chars = set(id_part.replace('_', '').replace('-', ''))
+                        orig_chars = set(orig_key.replace('_', '').replace('-', ''))
+                        filename_chars = set(filename_key.replace('_', '').replace('-', ''))
+                        
+                        # 如果id_part的所有字符都在文件名中，或者文件名包含id_part作为子串
+                        if (id_part in orig_key or 
+                            id_part in filename_key or
+                            id_chars.issubset(orig_chars) or
+                            id_chars.issubset(filename_chars) or
+                            # 处理数字后缀匹配：jm1 匹配 jm_test_1
+                            (id_part[:-1] in orig_key and any(c.isdigit() for c in id_part) and any(c.isdigit() for c in orig_key)) or
+                            (id_part[:-1] in filename_key and any(c.isdigit() for c in id_part) and any(c.isdigit() for c in filename_key))):
+                            found = ds
+                            break
+                    
+                    if not found:
+                        # 如果找不到，返回更详细的错误信息
+                        available_names = [ds.original_name for ds in datasets[:5]]
+                        error_msg = f'未找到数据集: {dataset_name} (搜索关键词: {id_part})'
+                        if available_names:
+                            error_msg += f'\n可用的数据集: {", ".join(available_names)}'
+                        else:
+                            error_msg += '\n请先上传数据集到数据管理页面'
+                        return jsonify({'success': False, 'error': error_msg}), 400
+                    
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], found.filename)
+                    # 检查文件是否存在
+                    if not os.path.exists(file_path):
+                        return jsonify({'success': False, 'error': f'数据集文件不存在: {found.original_name}'}), 400
+                    
+                    ext = os.path.splitext(found.original_name)[1].lower()
+                    data_values = []
+                    try:
+                        if ext in ['.xls', '.xlsx']:
+                            df = pd.read_excel(file_path, header=None, engine='openpyxl')
+                            flat = df.values.flatten()
+                            series = pd.to_numeric(flat, errors='coerce')
+                            data_values = [float(v) for v in series if pd.notna(v)]
+                        elif ext in ['.csv']:
+                            df = pd.read_csv(file_path, header=None)
+                            flat = df.values.flatten()
+                            series = pd.to_numeric(flat, errors='coerce')
+                            data_values = [float(v) for v in series if pd.notna(v)]
+                        else:
+                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read().replace('\n', ',')
+                                for x in content.split(','):
+                                    x = x.strip()
+                                    if not x:
+                                        continue
+                                    try:
+                                        data_values.append(float(x))
+                                    except ValueError:
+                                        continue
+                    except Exception as e:
+                        return jsonify({'success': False, 'error': f'数据文件解析失败: {str(e)}'}), 400
+                    
+                    if len(data_values) == 0:
+                        return jsonify({'success': False, 'error': f'数据集文件为空或无法解析: {found.original_name}'}), 400
+                    
+                    split_idx = int(len(data_values) * train_ratio / 100)
+                    train_data = data_values[:split_idx]
+                    test_data = data_values[split_idx:] if split_idx < len(data_values) else []
+                else:
+                    # 预定义数据集
+                    DATASETS = {
+                        'default': SAMPLE_FAILURE_DATA,
+                        'testset1': SAMPLE_FAILURE_DATA,
+                        'project': SAMPLE_FAILURE_DATA,
+                        'go': SAMPLE_FAILURE_DATA
+                    }
+                    if dataset_name in DATASETS:
+                        full_data = DATASETS[dataset_name]
+                        split_idx = int(len(full_data) * train_ratio / 100)
+                        train_data = full_data[:split_idx]
+                        test_data = full_data[split_idx:] if split_idx < len(full_data) else []
+                    else:
+                        return jsonify({'success': False, 'error': f'未知的数据集名称: {dataset_name}'}), 400
+            except Exception as e:
+                # 如果数据加载失败，返回详细错误信息
+                import traceback
+                error_msg = f'数据加载失败: {str(e)}'
+                print(f"数据加载异常: {traceback.format_exc()}")
+                return jsonify({'success': False, 'error': error_msg}), 400
+        
+        # 如果没有提供训练数据，使用默认数据
+        # 注意：只有在没有dataset_name时才使用默认数据
+        if (train_data is None or (isinstance(train_data, list) and len(train_data) < 3)):
+            if not dataset_name:
+                # 没有指定数据集名称，使用默认数据
+                train_data = SAMPLE_FAILURE_DATA
+            else:
+                # 有数据集名称但数据为空，返回错误
+                return jsonify({'success': False, 'error': f'数据集为空或数据点不足（至少需要3个）: {dataset_name}'}), 400
+        
         try:
             train_series = [float(x) for x in train_data]
+            test_series = [float(x) for x in test_data] if (test_data and isinstance(test_data, list) and len(test_data) > 0) else None
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': '训练数据必须为数值列表'}), 400
 
-        data_type = data.get('data_type', 'interval')  # interval 或 cumulative
-        if data_type == 'cumulative':
-            # 将累计失效时间点转换为失效间隔
-            if len(train_series) < 2:
-                return jsonify({'success': False, 'error': '累计时间点至少需要2个数据点'}), 400
-            diffs = [train_series[0]]
-            for i in range(1, len(train_series)):
-                diffs.append(train_series[i] - train_series[i-1])
-            train_series = diffs
+        # 不再进行数据类型转换，始终使用interval类型（失效时间间隔序列）
 
         model_keys = data.get('models') or ['jm', 'go', 'nhpp', 'bp', 'arima', 'gm11', 'svr']
         model_keys = list(dict.fromkeys(model_keys))  # 去重保持顺序
@@ -1870,8 +2130,12 @@ def api_model_compare():
                     train_series, look_back=look_back,
                     hidden_size=hidden_size, lr=lr, epochs=epochs, verbose=False
                 )
+                # 如果有测试数据，使用测试数据评估；否则使用训练数据
+                effective_test_data = None
+                if test_series and isinstance(test_series, list) and len(test_series) >= look_back + 1:
+                    effective_test_data = test_series
                 bp_metrics = bp_calculate_model_accuracy(
-                    bp_model_inst, train_series, look_back=look_back
+                    bp_model_inst, train_series, test_data=effective_test_data, look_back=look_back
                 )
                 results['bp'] = {
                     'name': 'BP 神经网络',
@@ -1914,7 +2178,7 @@ def api_model_compare():
                 epsilon = float(data.get('svr_epsilon', 0.1))
                 kernel = data.get('svr_kernel', None)
                 # 使用自动核与 PSO 优化
-                _, svr_metrics, _, _ = svr_train_model(
+                svr_model_inst, _, t_min, t_max = svr_train_model(
                     train_series,
                     look_back=look_back,
                     kernel=kernel,
@@ -1924,6 +2188,10 @@ def api_model_compare():
                     use_pso=True,
                     auto_kernel=True,
                 )
+                # 使用与单独预测相同的准确率计算函数
+                svr_metrics = calculate_svr_accuracy(
+                    svr_model_inst, train_series, look_back=look_back, t_min=t_min, t_max=t_max
+                )
                 results['svr'] = {
                     'name': 'SVR 模型',
                     **{k: float(v) for k, v in svr_metrics.items()}
@@ -1931,7 +2199,12 @@ def api_model_compare():
             except Exception as e:
                 results['svr'] = {'name': 'SVR 模型', 'error': str(e)}
 
-        return jsonify({'success': True, 'results': results, 'used_train_count': len(train_series)})
+        return jsonify({
+            'success': True, 
+            'results': results, 
+            'used_train_count': len(train_series),
+            'used_test_count': len(test_series) if test_series else 0
+        })
 
     except Exception as e:
         return jsonify({'success': False, 'error': f'服务器错误: {str(e)}'}), 500

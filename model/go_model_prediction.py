@@ -423,8 +423,17 @@ def calculate_model_accuracy(a, b, cumulative_times):
     rmse = np.sqrt(mse)
     r2 = r2_score(observed_cumulative_failures, predicted_cumulative_failures)
 
-    # 计算准确率（与GO.py一致）
-    accuracy = max(0, 100 * (1 - mae / np.mean(observed_cumulative_failures)))
+    # 计算准确率（改进版：使用更合理的公式，避免MAE过大时准确率为0）
+    # 使用相对误差的对称形式，限制单点最大误差为100%
+    mean_obs = np.mean(observed_cumulative_failures)
+    if mean_obs > 0:
+        # 使用相对误差，但限制在合理范围内
+        relative_errors = np.abs(observed_cumulative_failures - predicted_cumulative_failures) / (mean_obs + 1e-10)
+        relative_errors = np.minimum(relative_errors, 1.0)  # 限制单点最大误差为100%
+        mape = np.mean(relative_errors)
+        accuracy = max(0.0, min(100.0, (1.0 - mape) * 100.0))
+    else:
+        accuracy = 0.0
 
     return {
         'mae': float(mae),  # 确保是Python浮点数

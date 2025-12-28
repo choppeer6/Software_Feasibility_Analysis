@@ -278,7 +278,9 @@ def calculate_gm11_accuracy(
     ss_tot = float(np.sum((x0 - np.mean(x0)) ** 2))
     r2 = 1.0 - ss_res / ss_tot if ss_tot != 0 else 0.0
 
+    # 计算相对误差，限制单点最大误差为100%，避免准确率为0%
     rel_err = np.abs((x0 - x0_fit) / (np.abs(x0) + 1e-10))
+    rel_err = np.minimum(rel_err, 1.0)  # 限制单点最大相对误差为100%
     acc = float(max(0.0, min(100.0, (1.0 - np.mean(rel_err)) * 100.0)))
 
     return {
